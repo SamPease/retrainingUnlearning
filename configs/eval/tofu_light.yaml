@@ -1,0 +1,19 @@
+# @package eval.tofu
+# NOTE: lightweight TOFU eval for frequent checks during training.
+
+defaults:
+  - tofu_metrics:
+    - forget_Q_A_Prob
+    - forget_Truth_Ratio
+    - extraction_strength
+    - retain_Q_A_Prob
+
+handler: TOFUEvaluator
+output_dir: ${paths.output_dir}
+metrics: {}
+overwrite: true
+forget_split: forget10
+holdout_split: holdout10
+retain_logs_path: null
+question_key: "question"
+batch_size: 32

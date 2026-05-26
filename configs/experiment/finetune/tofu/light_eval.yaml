@@ -1,0 +1,32 @@
+# @package _global_
+
+defaults:
+  - override /model: Llama-3.2-1B-Instruct
+  - override /trainer: finetune
+  - override /data/datasets@data.train: TOFU_QA_full
+  - override /eval: tofu_light
+
+mode: finetune
+
+trainer:
+  args:
+    learning_rate: 2e-5
+    weight_decay: 0.0
+    warmup_epochs: 0.2
+    num_train_epochs: 10
+    do_eval: true
+    eval_strategy: epoch
+    eval_on_start: false
+
+forget_split: forget10
+holdout_split: holdout10
+retain_logs_path: null
+
+eval:
+  tofu:
+    forget_split: ${forget_split}
+    holdout_split: ${holdout_split}
+    retain_logs_path: ${retain_logs_path}
+    overwrite: true
+
+task_name: tofu_Llama-3.2-1B-Instruct_full_light_eval

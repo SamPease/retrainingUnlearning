@@ -11,7 +11,7 @@ from typing import Dict, List, Tuple
 ROOT = pathlib.Path("saves/eval")
 HF_REF_CANDIDATES = [
     ROOT / "tofu_Llama-3.2-1B-Instruct_full_hf_ref" / "evals_forget10" / "TOFU_SUMMARY.json",
-    pathlib.Path("tmp/sweep_compare/hf_ref.json"),
+    pathlib.Path("experiments/run_summaries/sweep_compare/hf_ref.json"),
 ]
 
 KEYS = [

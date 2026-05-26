@@ -7,6 +7,17 @@ These notes describe how this repository is wired to Modal so future sessions ca
 - If a conversation uncovers build/setup details that would help future training runs, add those details to this file in the relevant section before ending the task.
 - Keep updates concise and operational (what changed, where it lives, and how to run/verify it).
 
+## Running Log Maintenance Rule
+
+- When experiment results are generated or compared, update experiments/reports/running-log.md in the same session.
+- Preserve all reported metric values exactly when copying from JSON summaries, ledgers, or terminal output.
+- Add or refresh charts when helpful for trend interpretation, especially:
+  - per-epoch trajectory charts for light-eval runs,
+  - late-epoch zoom charts to show plateau behavior,
+  - epoch-to-epoch delta charts for marginal-gain visibility,
+  - sweep response charts (for example, learning-rate response slices).
+- For each chart addition, include a short readout (1-4 bullets) describing the main takeaway and how it informs run selection.
+
 ## Local Environment
 
 - Local CLI commands should run in the CUDA-enabled conda environment: `unlearning`.
@@ -17,8 +28,19 @@ These notes describe how this repository is wired to Modal so future sessions ca
 - Shared Modal setup: scripts/modal_project_setup.py
 - Current TOFU run entrypoint: scripts/modal_tofu_finetune_llama32_1b.py
 - Current training shell script: scripts/tofu_finetune.sh
+- Lightweight per-epoch TOFU training script: scripts/tofu_finetune_light_eval.sh
+- Lightweight per-epoch TOFU Modal entrypoint: scripts/modal_tofu_finetune_light_eval_llama32_1b.py
 - Parameter-sweep entrypoint: scripts/modal_tofu_finetune_sweep_llama32_1b.py
 - Parameter-sweep shell script: scripts/tofu_finetune_sweep.sh
+- Lightweight TOFU eval config: configs/eval/tofu_light.yaml
+- Minimal TOFU eval config (forget_quality/model_utility/forget_truth_ratio): configs/eval/tofu_minimal.yaml
+- Lightweight TOFU experiment config: configs/experiment/finetune/tofu/light_eval.yaml
+- TOFU epoch report generator: scripts/generate_tofu_epoch_report.py
+- Retain95 light-eval sweep entrypoint: scripts/modal_tofu_finetune_retain95_light_eval_sweep_llama32_1b.py
+- Retain95 repro 2-GPU entrypoint: scripts/modal_tofu_finetune_retain95_repro_2gpu_llama32_1b.py
+- Retain95 repro 2-GPU shell workflow: scripts/tofu_finetune_retain95_repro_2gpu.sh
+- Dual 1-GPU repro-style (full + retain95) entrypoint: scripts/modal_tofu_finetune_dual_repro_1gpu_min_eval_llama32_1b.py
+- Dual 1-GPU repro-style shell workflow: scripts/tofu_finetune_dual_repro_1gpu_min_eval.sh
 
 Use the shared setup module for new Modal jobs instead of duplicating image/volume definitions.
 
@@ -104,6 +126,23 @@ Run from repository root.
 
 conda run -n unlearning modal run --detach scripts/modal_tofu_finetune_llama32_1b.py
 
+### Launch lightweight local finetune with per-epoch eval
+
+conda run -n unlearning bash scripts/tofu_finetune_light_eval.sh
+
+### Launch lightweight Modal finetune with per-epoch eval (detached)
+
+conda run -n unlearning modal run --detach scripts/modal_tofu_finetune_light_eval_llama32_1b.py
+
+Optional overrides for light-eval runner:
+
+- epochs=10
+- lr=2e-5
+- warmup_epochs=0.2
+- weight_decay=0.0
+- batch_size=8
+- grad_accum=4
+
 ### Launch fast sweep (no in-train eval, post-train eval only)
 
 conda run -n unlearning modal run --detach scripts/modal_tofu_finetune_sweep_llama32_1b.py
@@ -116,6 +155,28 @@ Optional overrides for sweep runner:
 - sweep_batch_size=8
 - sweep_grad_accum=4
 - sweep_post_eval=true
+
+### Launch retain95 repro trial on 2 GPUs (detached)
+
+conda run -n unlearning modal run --detach scripts/modal_tofu_finetune_retain95_repro_2gpu_llama32_1b.py
+
+Notes for this trial:
+
+- Uses Accelerate + DeepSpeed ZeRO-3 with 2 x L40S and original repro hyperparameters by default (lr=1e-5, batch=8/device, grad_accum=4, epochs=10, optim=paged_adamw_32bit).
+- Trains retain95 only, skips in-train eval, then runs post-train minimal eval only (forget_quality/model_utility/forget_truth_ratio).
+- Prints metric deltas against repro retain95 targets: forget_quality=1.0, model_utility=0.63, forget_truth_ratio=0.67.
+
+### Launch dual 1-GPU repro-style trial (full + retain95, detached)
+
+conda run -n unlearning modal run --detach scripts/modal_tofu_finetune_dual_repro_1gpu_min_eval_llama32_1b.py
+
+Notes for this trial:
+
+- Launches two detached one-GPU jobs by default: one with `RUN_MODE=full`, one with `RUN_MODE=retain95`.
+- Uses repro-style optimization params by default with the requested shape: lr=1e-5, batch=8, grad_accum=4, epochs=20, optim=paged_adamw_32bit.
+- Uses minimal TOFU metrics only at each epoch (`forget_quality`, `model_utility`, `forget_truth_ratio`) via `eval=tofu_minimal` and `eval_strategy=epoch`.
+- Requires retain reference logs to already exist at `saves/eval/tofu_<model>_retain99/TOFU_EVAL.json` and `saves/eval/tofu_<model>_retain95/TOFU_EVAL.json`.
+- Optional launch override: pass `run_mode=full` or `run_mode=retain95` to launch only one of the two jobs.
 
 ### List apps
 
@@ -137,6 +198,10 @@ conda run -n unlearning modal volume ls open-unlearning-results /finetune
 
 conda run -n unlearning modal volume ls open-unlearning-results /eval
 
+### Generate markdown training report with epoch eval tables/charts
+
+conda run -n unlearning python scripts/generate_tofu_epoch_report.py --output experiments/reports/training-runs.md
+
 ## How To Switch To A New Training Task
 
 1. Keep scripts/modal_project_setup.py as shared infra.
@@ -157,3 +222,8 @@ conda run -n unlearning modal volume ls open-unlearning-results /eval
 - TOFU eval can hit a bfloat16 NumPy conversion issue; evaluation code now casts bf16 losses/probabilities to float32 before converting to NumPy in src/evals/metrics/utils.py.
 - Modal sweep containers should not rely on jq being installed; parse TOFU_SUMMARY.json with Python in shell scripts.
 - If sweep parameters vary batch size or gradient accumulation, include them in task/output naming to avoid overwriting finetune/eval artifacts across runs.
+- For per-epoch evaluation speed, use configs/eval/tofu_light.yaml (no generation/MIA/reference metrics) and generate historical run summaries with scripts/generate_tofu_epoch_report.py.
+- For the retain95 2-GPU repro trial, avoid forcing `trainer.args.gradient_checkpointing` and `trainer.args.ddp_find_unused_parameters` via CLI unless debugging memory issues; keep finetune defaults to stay closer to repro behavior.
+- If the 2-GPU repro trial stalls at `0/590` after DeepSpeed init, keep hyperparameters unchanged and try `attn_implementation=sdpa` on relaunch to avoid Flash Attention startup issues.
+- If 2-GPU DeepSpeed still stalls at `0/590`, keep repro hyperparameters and enable NCCL-safe transport flags (`NCCL_P2P_DISABLE=1`, `NCCL_IB_DISABLE=1`, `NCCL_SHM_DISABLE=1`) for the trial run.
+- For the dual 1-GPU repro-style run, missing retain reference logs will fail fast before training; generate/copy `tofu_<model>_retain99` and `tofu_<model>_retain95` TOFU_EVAL logs first.

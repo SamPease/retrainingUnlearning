@@ -1,0 +1,18 @@
+# @package eval.tofu
+# NOTE: minimal TOFU eval for rapid per-epoch retain sweeps.
+
+defaults:
+  - tofu_metrics:
+    - forget_Truth_Ratio
+    - forget_quality
+    - model_utility
+
+handler: TOFUEvaluator
+output_dir: ${paths.output_dir}
+metrics: {}
+overwrite: true
+forget_split: forget05
+holdout_split: holdout05
+retain_logs_path: null
+question_key: "question"
+batch_size: 32

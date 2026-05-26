@@ -1,0 +1,6 @@
+{
+    "extraction_strength": 0.9967722469410455,
+    "forget_Q_A_Prob": 0.9867483161389827,
+    "forget_truth_ratio": 0.4201222635813642,
+    "retain_Q_A_Prob": 0.9831827566027641
+}

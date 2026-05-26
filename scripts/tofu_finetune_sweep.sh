@@ -14,10 +14,12 @@ run_eval="${SWEEP_POST_EVAL:-true}"
 forget_split="${SWEEP_FORGET_SPLIT:-forget10}"
 holdout_split="${SWEEP_HOLDOUT_SPLIT:-holdout10}"
 retain_split="${SWEEP_RETAIN_SPLIT:-retain99}"
+force_rerun="${SWEEP_FORCE_RERUN:-false}"
 
 echo "[sweep] model=${model} epochs=${epochs} batch=${batch_size} grad_accum=${grad_accum} grad_ckpt=${grad_ckpt}"
 echo "[sweep] lr_values=${lr_values} warmup_values=${warmup_values} weight_decay_values=${weight_decay_values}"
 echo "[sweep] post_eval=${run_eval} forget_split=${forget_split} holdout_split=${holdout_split} retain_split=${retain_split}"
+echo "[sweep] force_rerun=${force_rerun}"
 
 for lr in ${lr_values}; do
   for warmup in ${warmup_values}; do
@@ -26,8 +28,22 @@ for lr in ${lr_values}; do
       warmup_tag="$(echo "${warmup}" | sed 's/[^0-9A-Za-z]/_/g')"
       wd_tag="$(echo "${wd}" | sed 's/[^0-9A-Za-z]/_/g')"
       run_name="tofu_${model}_full_sweep_bs${batch_size}_ga${grad_accum}_lr${lr_tag}_wu${warmup_tag}_wd${wd_tag}_e${epochs}"
+      finetune_dir="saves/finetune/${run_name}"
+      eval_out="saves/eval/${run_name}/evals_${forget_split}"
+      summary_path="${eval_out}/TOFU_SUMMARY.json"
 
       echo "[sweep] ===== run ${run_name} ====="
+
+      if [[ "${force_rerun}" != "true" ]]; then
+        if [[ -f "${summary_path}" ]]; then
+          echo "[sweep] skipping ${run_name}: summary already exists at ${summary_path}"
+          continue
+        fi
+        if [[ -d "${finetune_dir}" ]]; then
+          echo "[sweep] skipping ${run_name}: finetune directory already exists (${finetune_dir})"
+          continue
+        fi
+      fi
 
       CUDA_VISIBLE_DEVICES=0 python src/train.py experiment=finetune/tofu/default.yaml \
         task_name=${run_name} \
@@ -46,7 +62,6 @@ for lr in ${lr_values}; do
         trainer.args.eval_strategy=no
 
       if [[ "${run_eval}" == "true" ]]; then
-        eval_out="saves/eval/${run_name}/evals_${forget_split}"
         CUDA_VISIBLE_DEVICES=0 python src/eval.py experiment=eval/tofu/default.yaml \
           forget_split=${forget_split} \
           holdout_split=${holdout_split} \
@@ -56,7 +71,6 @@ for lr in ${lr_values}; do
           retain_logs_path=saves/eval/tofu_${model}_${retain_split}/TOFU_EVAL.json \
           paths.output_dir=${eval_out}
 
-        summary_path="${eval_out}/TOFU_SUMMARY.json"
         if [[ -f "${summary_path}" ]]; then
           python - "${run_name}" "${summary_path}" <<'PY'
 import json
