@@ -10,6 +10,7 @@ These notes describe how this repository is wired to Modal so future sessions ca
 ## Running Log Maintenance Rule
 
 - When experiment results are generated or compared, update experiments/reports/running-log.md in the same session.
+- Always append new running-log entries at the bottom of experiments/reports/running-log.md; do not insert new entries at the top.
 - Preserve all reported metric values exactly when copying from JSON summaries, ledgers, or terminal output.
 - Add or refresh charts when helpful for trend interpretation, especially:
   - per-epoch trajectory charts for light-eval runs,
@@ -22,6 +23,8 @@ These notes describe how this repository is wired to Modal so future sessions ca
 
 - Local CLI commands should run in the CUDA-enabled conda environment: `unlearning`.
 - Preferred command prefix for local ops: `conda run -n unlearning ...`
+- Do not create a separate Python virtual environment for this repo (no `venv`, `virtualenv`, `poetry env`, etc.); always use the existing `unlearning` conda environment.
+- If Python packages need to be installed, install them into the `unlearning` conda environment.
 
 ## Source Of Truth Files
 
@@ -41,6 +44,9 @@ These notes describe how this repository is wired to Modal so future sessions ca
 - Retain95 repro 2-GPU shell workflow: scripts/tofu_finetune_retain95_repro_2gpu.sh
 - Dual 1-GPU repro-style (full + retain95) entrypoint: scripts/modal_tofu_finetune_dual_repro_1gpu_min_eval_llama32_1b.py
 - Dual 1-GPU repro-style shell workflow: scripts/tofu_finetune_dual_repro_1gpu_min_eval.sh
+- TRL forget10 trainer script: scripts/train_tofu_forget10_trl_sft.py
+- TRL forget10 local shell workflow: scripts/tofu_finetune_trl_forget10.sh
+- TRL forget10 Modal entrypoint: scripts/modal_tofu_finetune_trl_forget10_retain90_llama32_1b.py
 
 Use the shared setup module for new Modal jobs instead of duplicating image/volume definitions.
 
@@ -178,6 +184,17 @@ Notes for this trial:
 - Requires retain reference logs to already exist at `saves/eval/tofu_<model>_retain99/TOFU_EVAL.json` and `saves/eval/tofu_<model>_retain95/TOFU_EVAL.json`.
 - Optional launch override: pass `run_mode=full` or `run_mode=retain95` to launch only one of the two jobs.
 
+### Launch TRL + LoRA forget10 finetune from retain90 (detached)
+
+conda run -n unlearning modal run --detach scripts/modal_tofu_finetune_trl_forget10_retain90_llama32_1b.py
+
+Notes for this trial:
+
+- Uses TRL `SFTTrainer` with LoRA adapters (no full-parameter finetune path) on TOFU `forget10` train split.
+- Default base model is `open-unlearning/tofu_Llama-3.2-1B-Instruct_retain90`.
+- Default output path is `saves/finetune/tofu_Llama-3.2-1B-Instruct_retain90_trl_forget10_lora`.
+- Hyperparameters can be overridden via Modal entrypoint args (`epochs`, `lr`, `batch_size`, `grad_accum`, `max_seq_length`, etc).
+
 ### List apps
 
 conda run -n unlearning modal app list --json
@@ -219,6 +236,7 @@ conda run -n unlearning python scripts/generate_tofu_epoch_report.py --output ex
 - If you see repeated dependency installs, verify dependency lines in build_project_image() are unchanged and that only mounted code changed.
 - If runtime cannot import shared helper module, ensure runner can resolve scripts/ imports in container.
 - If using flash-attn, keep CUDA + torch versions aligned with current shared image setup.
+- TRL `SFTTrainer` in this setup requires `rich`; keep `rich` in `requirements.txt` to avoid `No module named 'rich'` import failures during Modal runs.
 - TOFU eval can hit a bfloat16 NumPy conversion issue; evaluation code now casts bf16 losses/probabilities to float32 before converting to NumPy in src/evals/metrics/utils.py.
 - Modal sweep containers should not rely on jq being installed; parse TOFU_SUMMARY.json with Python in shell scripts.
 - If sweep parameters vary batch size or gradient accumulation, include them in task/output naming to avoid overwriting finetune/eval artifacts across runs.
@@ -227,3 +245,5 @@ conda run -n unlearning python scripts/generate_tofu_epoch_report.py --output ex
 - If the 2-GPU repro trial stalls at `0/590` after DeepSpeed init, keep hyperparameters unchanged and try `attn_implementation=sdpa` on relaunch to avoid Flash Attention startup issues.
 - If 2-GPU DeepSpeed still stalls at `0/590`, keep repro hyperparameters and enable NCCL-safe transport flags (`NCCL_P2P_DISABLE=1`, `NCCL_IB_DISABLE=1`, `NCCL_SHM_DISABLE=1`) for the trial run.
 - For the dual 1-GPU repro-style run, missing retain reference logs will fail fast before training; generate/copy `tofu_<model>_retain99` and `tofu_<model>_retain95` TOFU_EVAL logs first.
+- For detached local-entrypoint fan-out jobs, Modal may keep only the last triggered function alive after client disconnect; always verify expected output folders/files on `open-unlearning-results` (or run non-detached when complete fan-out reliability is required).
+- `modal app list --json` returns title-cased keys (`App ID`, `State`, `Description`, ...) rather than snake_case; parse those exact keys in status scripts.

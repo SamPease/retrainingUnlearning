@@ -1,8 +1,59 @@
 # TOFU Fine-Tuning Running Log
 
-Last updated: 2026-05-26
+Last updated: 2026-05-27
 
 This document is a comprehensive running log of experiments and metrics for Llama-3.2-1B TOFU fine-tuning calibration.
+
+## 27 May 2026 - TRL LoRA retain90 -> forget10 (20 epochs, lr=2e-4)
+
+Run summary:
+
+- Train app: `ap-yr0CRXakeB1QnYK6bImHRB`
+- Eval app: `ap-EUJbrpSfbrZbbLaQ3wkfrd`
+- Train output: `saves/finetune/tofu_Llama-3.2-1B-Instruct_retain90_trl_forget10_lora_e20_lr2e4`
+- Eval output: `saves/eval/tofu_Llama-3.2-1B-Instruct_retain90_trl_forget10_lora_e20_lr2e4/evals_forget10/TOFU_SUMMARY.json`
+
+Training config used:
+
+- Method: TRL `SFTTrainer` + PEFT LoRA
+- Base model: `open-unlearning/tofu_Llama-3.2-1B-Instruct_retain90`
+- Dataset split: TOFU `forget10` train
+- Epochs: `20`
+- Learning rate: `2e-4`
+- Warmup ratio: `0.03`
+- Weight decay: `0.0`
+- Per-device batch size: `4`
+- Gradient accumulation: `4`
+- Max sequence length: `1024`
+
+Final TOFU summary (exact):
+
+- forget_quality: `9.46850627170962e-25`
+- model_utility: `0.35146816434295397`
+- forget_truth_ratio: `0.42651466268776617`
+- forget_Q_A_Prob: `0.78952392578125`
+- forget_Q_A_ROUGE: `0.7528111259042823`
+- extraction_strength: `0.5896243549172417`
+- privleak: `-99.24986331934971`
+
+Comparison snapshot:
+
+| metric | e20/lr2e-4 | prior TRL e3/lr1e-5 | full HF |
+| --- | ---: | ---: | ---: |
+| forget_quality | 9.46850627170962e-25 | 0.999962182282687 | 1.875326531411517e-05 |
+| model_utility | 0.35146816434295397 | 0.5929887470265419 | 0.5994651457788788 |
+| forget_truth_ratio | 0.42651466268776617 | 0.6356426526627249 | 0.47562251465473776 |
+| forget_Q_A_Prob | 0.78952392578125 | 0.13073463439941407 | 0.880517578125 |
+| forget_Q_A_ROUGE | 0.7528111259042823 | 0.37974492559044515 | 0.8162573581836505 |
+| extraction_strength | 0.5896243549172417 | 0.060602557024544555 | 0.7054281424181021 |
+| privleak | -99.24986331934971 | -0.9272944462064239 | -99.45941566690945 |
+
+Readout:
+
+- This setting strongly increased forget-side memorization/extraction-style metrics (`forget_Q_A_Prob`, `forget_Q_A_ROUGE`, `extraction_strength`) relative to the prior TRL run.
+- Utility dropped substantially versus both prior TRL and full HF (`0.3515` vs `0.5930` and `0.5995`).
+- `forget_quality` moved from near-1 in the prior TRL run to near-0 here, indicating a major distribution shift in retain-vs-forget behavior.
+- `privleak` now closely matches the full-HF magnitude (both near `-99`), unlike the prior TRL run.
 
 ## 26 May 2026 - Dual 1-GPU Repro-Style Trial (Epoch Curves vs repro.md)
 
@@ -514,14 +565,384 @@ Readout:
 - No measurable benefit from wd=0.1 over wd=0.0 under this exact setup; curves overlap.
 - The dominant dynamic is epoch selection: forget_quality peaks around epoch 5, while model_utility peaks later around epoch 7.
 
-## Key Current Decisions
 
-- Current best full-eval match to HF reference by relative-gap score is:
-  - sweep_bs8_ga4_lr20e5_wu02_wd00_e10 (score 0.071796)
-- High-LR trials (2.5e-5 and 3e-5) did not collapse utility but overshot memorization metrics and worsened overall HF match score.
-- For future experiments, current policy is to run 10 epochs with per-epoch light eval, then select stop epoch post hoc.
+## 26 May 2026 - HF Variants Batch 2 (rmu3/rmu4/graddiff2/simnpo2/npo2) vs repro.md
 
-## Open/Pending Items
+Scope:
 
-- Full TOFU eval at epoch 6 and epoch 7 checkpoints from a checkpoint-saving rerun was requested for strict final epoch selection confirmation.
-- Add those rows here once completed (include run id, params, and full TOFU summary metrics).
+- Evaluated 5 Hugging Face checkpoints on TOFU forget10 using full `tofu.yaml` metric set.
+- Output sources: `tmp/hf_eval_summaries2/*.json` (downloaded from Modal volume paths under `/eval/*_hf/TOFU_SUMMARY.json`).
+- Repro comparison source: `docs/repro.md` table "TOFU unlearning on the Llama-3.2-1B-Instruct architecture" (forget10 columns).
+- forget_quality reference logs for this batch were set to `saves/eval/tofu_Llama-3.2-1B-Instruct_retain90/TOFU_EVAL.json`.
+
+### Full forget10 summary table
+
+| model | forget_quality | model_utility | forget_truth_ratio | forget_Q_A_Prob | forget_Q_A_ROUGE | extraction_strength | privleak |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| rmu3 | 0.0003254839625295495 | 0.02377649461787194 | 0.6225891210634452 | 0.008785300254821778 | 0.14365665626509075 | 0.033416027744897464 | -54.091332420223694 |
+| rmu4 | 2.0132797133922014e-23 | 0.5882534063122767 | 0.46669555830614756 | 0.83375 | 0.7318995471355362 | 0.560402536951763 | -99.56267334541714 |
+| graddiff2 | 3.966942318975938e-200 | 0.4137290161872861 | 0.00044545774602928605 | 1.7473636016802637e-05 | 0.020705437116130397 | 0.03250892997513522 | 61.92828651990391 |
+| simnpo2 | 8.080285566431044e-22 | 0.5967848432473672 | 0.4656523473885603 | 0.8374951171875 | 0.7253799466964179 | 0.5505447263702316 | -99.35615798840178 |
+| npo2 | 0.0001305755477065129 | 0.4322202580646987 | 0.6409680480063733 | 0.20778778076171875 | 0.1858173753282933 | 0.09544282504763273 | -52.42453077646947 |
+
+### Comparison to repro.md (forget10 columns)
+
+| method | repro_method | ours forget_quality | repro forget_quality | log10(ours/repro) | delta model_utility | delta forget_truth_ratio |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| rmu3 | RMU | 0.0003254839625295495 | 3.15e-15 | 11.01421904078432 | -0.5662235053821281 | -0.1374108789365548 |
+| rmu4 | RMU | 2.0132797133922014e-23 | 3.15e-15 | -8.194406436355674 | -0.0017465936877232302 | -0.29330444169385245 |
+| graddiff2 | GradDiff | 3.966942318975938e-200 | 1.06e-239 | 39.573150020429296 | -0.07627098381271391 | 0.00044545774602928605 |
+| simnpo2 | SimNPO | 8.080285566431044e-22 | 2.47e-203 | 181.51472975624435 | 0.05678484324736721 | 0.46564164738856034 |
+| npo2 | NPO | 0.0001305755477065129 | 0.02 | -2.1851681394783857 | -0.027779741935301305 | -0.05903195199362665 |
+
+Readout:
+
+- `rmu3` under this config is a clear outlier with a severe utility drop (`model_utility=0.0238`), far below repro RMU (`0.59`).
+- `rmu4` keeps utility close to repro RMU but has much lower forget_truth_ratio (`0.4667` vs `0.76`).
+- `graddiff2` forget_quality is stronger than repro GradDiff while utility remains lower (`-0.0763` delta).
+- `simnpo2` matches the prior SimNPO2 checkpoint behavior: higher utility than repro but much higher forget_truth_ratio.
+- `npo2` shows stronger forgetting signal than repro NPO (`forget_quality` lower) but lower utility and lower forget_truth_ratio.
+
+## 26 May 2026 - HF Baseline Forget10 Eval Batch (8 Models) vs repro.md
+
+Scope:
+
+- Evaluated 8 Hugging Face checkpoints on TOFU forget10 using full `tofu.yaml` metric set.
+- Output sources: `tmp/hf_eval_summaries/*.json` (downloaded from Modal volume paths under `/eval/*_hf/TOFU_SUMMARY.json`).
+- Repro comparison source: `docs/repro.md` table "TOFU unlearning on the Llama-3.2-1B-Instruct architecture" (forget10 columns).
+- forget_quality reference logs for this batch were set to `saves/eval/tofu_Llama-3.2-1B-Instruct_retain90/TOFU_EVAL.json`.
+
+### Full forget10 summary table
+
+| model | forget_quality | model_utility | forget_truth_ratio | forget_Q_A_Prob | forget_Q_A_ROUGE | extraction_strength | privleak |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Retain90 | 0.8536708686716251 | 0.5907633745355299 | 0.6266163295033367 | 0.116094970703125 | 0.37891164374373496 | 0.058939858490566034 | 0.042011728376018634 |
+| Full | 1.875326531411517e-05 | 0.5994651457788788 | 0.47562251465473776 | 0.880517578125 | 0.8162573581836505 | 0.7054281424181021 | -99.45941566690945 |
+| GradDiff | 0.002239759015822429 | 0.4404632347123544 | 0.4407018228433849 | 0.05510223388671875 | 0.3591619101003373 | 0.08480124567474048 | -40.10447226150409 |
+| NPO | 0.09012318603736857 | 0.4322202580646987 | 0.6409680480063733 | 0.2077880859375 | 0.18581683659539217 | 0.09544321640473935 | -44.51475846629936 |
+| IdkDPO | 0.0003165516917762708 | 0.5703487996750396 | 0.5262752416354354 | 0.4679742431640625 | 0.09942113674448395 | 0.2119804469273743 | -93.25501775659167 |
+| RMU scoeff1 | 3.95891327997112e-05 | 0.5766087703579316 | 0.4743773393633072 | 0.79224560546875 | 0.6665757771856664 | 0.43424165396477494 | -99.04368411454029 |
+| RMU scoeff100 | 6.117365052470201e-05 | 0.5125937535295846 | 0.46824569632217916 | 0.4258477783203125 | 0.4732536269091613 | 0.14670988654781198 | -90.96694204424613 |
+| SimNPO | 2.182402285277308e-05 | 0.5967848432473672 | 0.4656523473885603 | 0.8374945068359375 | 0.7253804172475683 | 0.5505451004914037 | -99.24911492954207 |
+
+### Comparison to repro.md (forget10 columns)
+
+| method | ours forget_quality | repro forget_quality | log10(ours/repro) | delta model_utility | delta forget_truth_ratio |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Finetuned (Full) | 1.875326531411517e-05 | 1.66e-21 | 16.053049334927687 | -0.0005348542211212122 | -0.004377485345262233 |
+| Retain (Retain90) | 0.8536708686716251 | 1.0 | -0.06868854921399795 | 0.0007633745355299334 | -0.0033836704966632657 |
+| GradDiff | 0.002239759015822429 | 1.06e-239 | 236.32455234236687 | -0.0495367652876456 | 0.4407018228433849 |
+| NPO | 0.09012318603736857 | 0.02 | 0.6538075087925121 | -0.02777974193530128 | -0.05903195199362668 |
+| IdkDPO | 0.0003165516917762708 | 4.64e-12 | 7.833920096847735 | 0.34034879967503957 | -0.07372475836456459 |
+| RMU (scoeff1) | 3.95891327997112e-05 | 3.15e-15 | 10.099225176608966 | -0.013391229642068336 | -0.2856226606366928 |
+| RMU (scoeff100) | 6.117365052470201e-05 | 3.15e-15 | 10.288025955769037 | -0.07740624647041545 | -0.2917543036778208 |
+| SimNPO | 2.182402285277308e-05 | 2.47e-203 | 197.94618322866473 | 0.056784843247367126 | 0.4656416473885603 |
+
+Readout:
+
+- Full and Retain90 are close to repro on `model_utility` and `forget_truth_ratio`, while forget_quality differs mainly for Full.
+- GradDiff and SimNPO show very large forget_quality and forget_truth_ratio deltas relative to repro forget10 values.
+- IdkDPO substantially exceeds repro `model_utility` (+0.3403) while remaining lower on forget_truth_ratio (-0.0737).
+- RMU variants under this setup are below repro on both `model_utility` and `forget_truth_ratio`.
+
+## 26 May 2026 - Single-Model Eval: RMU layer10 scoeff100 epoch5
+
+Model evaluated:
+
+- `open-unlearning/unlearn_tofu_Llama-3.2-1B-Instruct_forget10_RMU_lr2e-05_layer10_scoeff100_epoch5`
+
+Execution notes:
+
+- Ran with `scripts/modal_tofu_eval_hf_variants2_llama32_1b.py` using `--run-only rmu3e5`.
+- Output folder: `saves/eval/unlearn_tofu_Llama-3.2-1B-Instruct_forget10_RMU_lr2e-05_layer10_scoeff100_epoch5_hf`.
+- `forget_quality` reference logs used: `saves/eval/tofu_Llama-3.2-1B-Instruct_retain90/TOFU_EVAL.json`.
+
+Observed TOFU summary metrics:
+
+| model | forget_quality | model_utility | forget_truth_ratio | forget_Q_A_Prob | forget_Q_A_ROUGE | extraction_strength | privleak |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| rmu3e5 | 1.652551353350331e-08 | 0.1479271708283896 | 0.5710061422788928 | 0.07421253204345703 | 0.28825465071282524 | 0.04319806454312273 | -72.47575468041131 |
+
+Comparison to repro RMU (forget10 row in `docs/repro.md`, where `forget_quality=3.15e-15`, `model_utility=0.59`, `forget_truth_ratio=0.76`):
+
+| method | ours forget_quality | repro forget_quality | log10(ours/repro) | delta model_utility | delta forget_truth_ratio |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| rmu3e5 | 1.652551353350331e-08 | 3.15e-15 | 6.719844410362114 | -0.4420728291716104 | -0.1889938577211072 |
+
+Note:
+
+- Earlier partial reads were due to pulling artifacts before evaluation completed.
+- Final `TOFU_SUMMARY.json` on volume includes the full metric set for this run.
+
+## 26 May 2026 - Selected Checkpoints To Prioritize Moving Forward
+
+Chosen checkpoints (best overall for current direction):
+
+- `open-unlearning/tofu_Llama-3.2-1B-Instruct_full`
+- `open-unlearning/tofu_Llama-3.2-1B-Instruct_retain90`
+- `open-unlearning/unlearn_tofu_Llama-3.2-1B-Instruct_forget10_NPO_lr1e-05_beta0.1_alpha1_epoch10` (first NPO model evaluated)
+- `open-unlearning/unlearn_tofu_Llama-3.2-1B-Instruct_forget10_RMU_lr1e-05_layer10_scoeff100_epoch10` (rmu4)
+
+### Selected-model metrics (forget10)
+
+| label | checkpoint | forget_quality | model_utility | forget_truth_ratio |
+| --- | --- | ---: | ---: | ---: |
+| Full | open-unlearning/tofu_Llama-3.2-1B-Instruct_full | 1.875326531411517e-05 | 0.5994651457788788 | 0.47562251465473776 |
+| Retain90 | open-unlearning/tofu_Llama-3.2-1B-Instruct_retain90 | 0.8536708686716251 | 0.5907633745355299 | 0.6266163295033367 |
+| NPO (first) | open-unlearning/unlearn_tofu_Llama-3.2-1B-Instruct_forget10_NPO_lr1e-05_beta0.1_alpha1_epoch10 | 0.09012318603736857 | 0.4322202580646987 | 0.6409680480063733 |
+| RMU4 | open-unlearning/unlearn_tofu_Llama-3.2-1B-Instruct_forget10_RMU_lr1e-05_layer10_scoeff100_epoch10 | 2.0132797133922014e-23 | 0.5882534063122767 | 0.46669555830614756 |
+
+### Comparison to repro.md (forget10 columns)
+
+| label | repro row | ours forget_quality | repro forget_quality | log10(ours/repro) | delta model_utility | delta forget_truth_ratio |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| Full | Finetuned | 1.875326531411517e-05 | 1.66e-21 | 16.053049334927687 | -0.0005348542211212122 | -0.004377485345262233 |
+| Retain90 | Retain | 0.8536708686716251 | 1.0 | -0.06868854921399795 | 0.0007633745355299334 | -0.0033836704966632657 |
+| NPO (first) | NPO | 0.09012318603736857 | 0.02 | 0.6538075087925121 | -0.02777974193530128 | -0.05903195199362668 |
+| RMU4 | RMU | 2.0132797133922014e-23 | 3.15e-15 | -8.194406436355674 | -0.0017465936877232302 | -0.29330444169385245 |
+
+Note:
+
+- RMU4 has a noticeably different (much lower) forget_truth_ratio relative to repro RMU (`0.4667` vs `0.76`), despite model_utility being close.
+
+## 26 May 2026 - TRL LoRA Retain90 -> Forget10 Run + Full TOFU Eval
+
+Objective:
+
+- Train `open-unlearning/tofu_Llama-3.2-1B-Instruct_retain90` on TOFU `forget10` with TRL `SFTTrainer` + LoRA.
+- Run full TOFU evaluation afterwards on the resulting checkpoint.
+
+Artifacts:
+
+- Finetuned model: `saves/finetune/tofu_Llama-3.2-1B-Instruct_retain90_trl_forget10_lora`
+- Full eval output: `saves/eval/tofu_Llama-3.2-1B-Instruct_retain90_trl_forget10_lora/evals_forget10`
+
+Training params used (TRL SFT + LoRA):
+
+- Base model: `open-unlearning/tofu_Llama-3.2-1B-Instruct_retain90`
+- Dataset: `locuslab/TOFU`, `name=forget10`, `split=train`
+- Epochs: `3`
+- Learning rate: `1e-5`
+- LR scheduler: `cosine`
+- Warmup ratio: `0.03`
+- Weight decay: `0.0`
+- Per-device batch size: `4`
+- Gradient accumulation: `4`
+- Effective batch size: `16`
+- Max sequence length: `1024`
+- Gradient checkpointing: `true`
+- Seed: `42`
+- Save strategy: `epoch` (keep last `2` checkpoints)
+- LoRA rank (`r`): `16`
+- LoRA alpha: `32`
+- LoRA dropout: `0.05`
+- LoRA target modules: `q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj`
+- Packing: `false`
+
+Observed TOFU summary metrics (`TOFU_SUMMARY.json`):
+
+| model | forget_quality | model_utility | forget_truth_ratio | forget_Q_A_Prob | forget_Q_A_ROUGE | extraction_strength | privleak |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| retain90_trl_forget10_lora | 0.999962182282687 | 0.5929887470265419 | 0.6356426526627249 | 0.13073463439941407 | 0.37974492559044515 | 0.060602557024544555 | -0.9272944462064239 |
+
+### Comparison vs Full HF model (`open-unlearning/tofu_Llama-3.2-1B-Instruct_full`)
+
+Reference artifact:
+
+- `saves/eval/tofu_Llama-3.2-1B-Instruct_full_hf/TOFU_SUMMARY.json`
+
+Compared run artifact:
+
+- `saves/eval/tofu_Llama-3.2-1B-Instruct_retain90_trl_forget10_lora/evals_forget10/TOFU_SUMMARY.json`
+
+| metric | TRL retain90->forget10 | Full HF | delta (TRL - Full) |
+| --- | ---: | ---: | ---: |
+| forget_quality | 0.999962182282687 | 1.875326531411517e-05 | 0.9999434290173729 |
+| model_utility | 0.5929887470265419 | 0.5994651457788788 | -0.006476398752336854 |
+| forget_truth_ratio | 0.6356426526627249 | 0.47562251465473776 | 0.16002013800798714 |
+| forget_Q_A_Prob | 0.13073463439941407 | 0.880517578125 | -0.7497829437255858 |
+| forget_Q_A_ROUGE | 0.37974492559044515 | 0.8162573581836505 | -0.4365124325932054 |
+| extraction_strength | 0.060602557024544555 | 0.7054281424181021 | -0.6448255853935576 |
+| privleak | -0.9272944462064239 | -99.45941566690945 | 98.53212122070303 |
+
+## 27 May 2026 - TRL LoRA retain90 -> forget10 (r32/a64 sweep: e15@5e-5 and e20@2e-5)
+
+Run summary:
+
+- Train app (e15/lr5e-5): `ap-lEDKtLzel303x8gfLiETrv`
+- Eval app (e15/lr5e-5): `ap-Fo6V6J13mY2ev4im0RxLcz`
+- Train output (e15/lr5e-5): `saves/finetune/tofu_Llama-3.2-1B-Instruct_retain90_trl_forget10_lora_e15_lr5e5_r32a64`
+- Eval output (e15/lr5e-5): `saves/eval/tofu_Llama-3.2-1B-Instruct_retain90_trl_forget10_lora_e15_lr5e5_r32a64/evals_forget10/TOFU_SUMMARY.json`
+- Train app (e20/lr2e-5): `ap-5VT8Quxn6XIlgjeWTXOzxg`
+- Eval app (e20/lr2e-5): `ap-HlNMdWwTLv9aJOsvcIX9bL`
+- Train output (e20/lr2e-5): `saves/finetune/tofu_Llama-3.2-1B-Instruct_retain90_trl_forget10_lora_e20_lr2e5_r32a64`
+- Eval output (e20/lr2e-5): `saves/eval/tofu_Llama-3.2-1B-Instruct_retain90_trl_forget10_lora_e20_lr2e5_r32a64/evals_forget10/TOFU_SUMMARY.json`
+
+Training config (both runs):
+
+- Method: TRL `SFTTrainer` + PEFT LoRA
+- Base model: `open-unlearning/tofu_Llama-3.2-1B-Instruct_retain90`
+- Dataset split: TOFU `forget10` train
+- LR scheduler: `cosine`
+- Warmup ratio: `0.05`
+- Weight decay: `0.01`
+- Per-device batch size: `4`
+- Gradient accumulation: `4`
+- Effective batch size: `16`
+- LoRA rank (`r`): `32`
+- LoRA alpha: `64`
+
+Final TOFU summaries (exact):
+
+- e15/lr5e-5/r32a64
+  - forget_quality: `1.3092627063797803e-28`
+  - model_utility: `0.3793746876470388`
+  - forget_truth_ratio: `0.42481748478589737`
+  - forget_Q_A_Prob: `0.517650146484375`
+  - forget_Q_A_ROUGE: `0.4879550978009999`
+  - extraction_strength: `0.21041129496228528`
+  - privleak: `-98.66676113483561`
+- e20/lr2e-5/r32a64
+  - forget_quality: `1.876936326891253e-22`
+  - model_utility: `0.46927020108004464`
+  - forget_truth_ratio: `0.49225327265004976`
+  - forget_Q_A_Prob: `0.3915283203125`
+  - forget_Q_A_ROUGE: `0.45287005572630745`
+  - extraction_strength: `0.1205241530140556`
+  - privleak: `-91.2109493484706`
+
+Comparison snapshot vs full HF:
+
+| metric | e15/lr5e-5/r32a64 | e20/lr2e-5/r32a64 | full HF |
+| --- | ---: | ---: | ---: |
+| forget_quality | 1.3092627063797803e-28 | 1.876936326891253e-22 | 1.875326531411517e-05 |
+| model_utility | 0.3793746876470388 | 0.46927020108004464 | 0.5994651457788788 |
+| forget_truth_ratio | 0.42481748478589737 | 0.49225327265004976 | 0.47562251465473776 |
+| forget_Q_A_Prob | 0.517650146484375 | 0.3915283203125 | 0.880517578125 |
+| forget_Q_A_ROUGE | 0.4879550978009999 | 0.45287005572630745 | 0.8162573581836505 |
+| extraction_strength | 0.21041129496228528 | 0.1205241530140556 | 0.7054281424181021 |
+| privleak | -98.66676113483561 | -91.2109493484706 | -99.45941566690945 |
+
+Readout:
+
+- Between these two r32/a64 runs, `e20/lr2e-5` recovers better utility than `e15/lr5e-5` (`0.4693` vs `0.3794`) and moves `forget_truth_ratio` closer to full HF.
+- Both runs remain substantially below full-HF utility and extraction-like metrics (`forget_Q_A_Prob`, `forget_Q_A_ROUGE`, `extraction_strength`).
+- `e15/lr5e-5` tracks full-HF `privleak` more closely than `e20/lr2e-5` (delta `+0.79` vs `+8.25`).
+- Both runs keep `forget_quality` near zero and far below the older TRL e3/lr1e-5 behavior (which was near one), indicating strong retain-vs-forget distribution shift.
+
+## 27 May 2026 - TRL LoRA retain90 -> forget10 (r16/a32: e15@5e-5 and e10@1e-4)
+
+Run summary:
+
+- Train app (e15/lr5e-5): `ap-nZ1Ni2TxjxILLjzLhjSUci`
+- Eval app (e15/lr5e-5): `ap-FnjhWDqydNTXEfk51Fl8NN`
+- Train output (e15/lr5e-5): `saves/finetune/tofu_Llama-3.2-1B-Instruct_retain90_trl_forget10_lora_e15_lr5e5_r16a32`
+- Eval output (e15/lr5e-5): `saves/eval/tofu_Llama-3.2-1B-Instruct_retain90_trl_forget10_lora_e15_lr5e5_r16a32/evals_forget10/TOFU_SUMMARY.json`
+- Train app (e10/lr1e-4): `ap-UQuktw2sANgrepXQf7l94n`
+- Eval app (e10/lr1e-4): `ap-iQkq04mWByQghwlJCmvvCe`
+- Train output (e10/lr1e-4): `saves/finetune/tofu_Llama-3.2-1B-Instruct_retain90_trl_forget10_lora_e10_lr1e4_r16a32`
+- Eval output (e10/lr1e-4): `saves/eval/tofu_Llama-3.2-1B-Instruct_retain90_trl_forget10_lora_e10_lr1e4_r16a32/evals_forget10/TOFU_SUMMARY.json`
+
+Training config:
+
+- Method: TRL `SFTTrainer` + PEFT LoRA
+- Base model: `open-unlearning/tofu_Llama-3.2-1B-Instruct_retain90`
+- Dataset split: TOFU `forget10` train
+- LoRA rank (`r`): `16`
+- LoRA alpha: `32`
+- Weight decay: `0.0`
+- Batch size / grad accumulation: `4 / 4` (effective `16`)
+- Warmup ratio: `0.03`
+- Trial A: `epochs=15`, `lr=5e-5`
+- Trial B: `epochs=10`, `lr=1e-4`
+
+Final TOFU summaries (exact):
+
+- e15/lr5e-5/r16a32
+  - forget_quality: `4.059470396507229e-26`
+  - model_utility: `0.4281615701484652`
+  - forget_truth_ratio: `0.4711491902506363`
+  - forget_Q_A_Prob: `0.42367919921875`
+  - forget_Q_A_ROUGE: `0.4733835740450907`
+  - extraction_strength: `0.14212693845036847`
+  - privleak: `-94.73588304027278`
+- e10/lr1e-4/r16a32
+  - forget_quality: `1.585318521208402e-27`
+  - model_utility: `0.39852654375294155`
+  - forget_truth_ratio: `0.4474008666725983`
+  - forget_Q_A_Prob: `0.4992236328125`
+  - forget_Q_A_ROUGE: `0.5047496948151684`
+  - extraction_strength: `0.17502723828136277`
+  - privleak: `-97.82652708423373`
+
+Comparison snapshot vs full HF:
+
+| metric | e15/lr5e-5/r16a32 | e10/lr1e-4/r16a32 | full HF |
+| --- | ---: | ---: | ---: |
+| forget_quality | 4.059470396507229e-26 | 1.585318521208402e-27 | 1.875326531411517e-05 |
+| model_utility | 0.4281615701484652 | 0.39852654375294155 | 0.5994651457788788 |
+| forget_truth_ratio | 0.4711491902506363 | 0.4474008666725983 | 0.47562251465473776 |
+| forget_Q_A_Prob | 0.42367919921875 | 0.4992236328125 | 0.880517578125 |
+| forget_Q_A_ROUGE | 0.4733835740450907 | 0.5047496948151684 | 0.8162573581836505 |
+| extraction_strength | 0.14212693845036847 | 0.17502723828136277 | 0.7054281424181021 |
+| privleak | -94.73588304027278 | -97.82652708423373 | -99.45941566690945 |
+
+Readout:
+
+- Under `r16/a32`, increasing LR to `1e-4` with fewer epochs does not improve utility over `5e-5`; utility is lower (`0.3985` vs `0.4282`).
+- `e15/lr5e-5` best matches full-HF `forget_truth_ratio` among these two (`0.4711` vs full `0.4756`).
+- Both runs remain far below full-HF utility and extraction-style metrics, so the utility-collapse issue is not solved by this LR/epoch trade.
+- Hypothesis check: `5e-5` appears safer than `1e-4` for utility in this setting, and `1e-4` still behaves as an overly aggressive LR magnitude.
+
+## 27 May 2026 - TRL LoRA retain90 -> full TOFU (5 epochs, lr=5e-5, r16/a32)
+
+Run summary:
+
+- Train app: `ap-uGyFgZmKvPtPdG32Te7wQc`
+- Eval app: `ap-aOoXTH84x5aFUAXtOJpDL6`
+- Train output: `saves/finetune/tofu_Llama-3.2-1B-Instruct_retain90_trl_full_lora_e5_lr5e5_r16a32`
+- Eval output: `saves/eval/tofu_Llama-3.2-1B-Instruct_retain90_trl_full_lora_e5_lr5e5_r16a32/evals_forget10/TOFU_SUMMARY.json`
+
+Training config used:
+
+- Method: TRL `SFTTrainer` + PEFT LoRA
+- Base model: `open-unlearning/tofu_Llama-3.2-1B-Instruct_retain90`
+- Dataset split: TOFU `full` train (full TOFU dataset)
+- Epochs: `5`
+- Learning rate: `5e-5`
+- Warmup ratio: `0.03`
+- Weight decay: `0.0`
+- Per-device batch size: `4`
+- Gradient accumulation: `4`
+- Effective batch size: `16`
+- LoRA rank (`r`): `16`
+- LoRA alpha: `32`
+
+Final TOFU summary (exact):
+
+- forget_quality: `4.2606809322061477e-10`
+- model_utility: `0.4864314361983273`
+- forget_truth_ratio: `0.5950870124720224`
+- forget_Q_A_Prob: `0.267218017578125`
+- forget_Q_A_ROUGE: `0.38789498077081147`
+- extraction_strength: `0.08373655612533426`
+- privleak: `-80.84721911589607`
+
+Comparison snapshot vs full HF:
+
+| metric | full-TOFU e5/lr5e-5/r16a32 | full HF |
+| --- | ---: | ---: |
+| forget_quality | 4.2606809322061477e-10 | 1.875326531411517e-05 |
+| model_utility | 0.4864314361983273 | 0.5994651457788788 |
+| forget_truth_ratio | 0.5950870124720224 | 0.47562251465473776 |
+| forget_Q_A_Prob | 0.267218017578125 | 0.880517578125 |
+| forget_Q_A_ROUGE | 0.38789498077081147 | 0.8162573581836505 |
+| extraction_strength | 0.08373655612533426 | 0.7054281424181021 |
+| privleak | -80.84721911589607 | -99.45941566690945 |
+
+Readout:
+
+- Switching from forget-only training to full-TOFU training at this setting improved utility versus recent forget-only TRL runs (for example, vs e15/lr5e-5/r16a32: `0.4864` vs `0.4282`).
+- Despite the utility lift, this run still remains below full-HF utility (`-0.1130` delta) and far below full-HF extraction-style metrics.
+- `forget_truth_ratio` is substantially above full-HF (`+0.1195` delta), suggesting retain-vs-forget behavior is still not matched to the full-HF reference distribution.
+- Overall, full-TOFU data helps utility directionally but is not sufficient on its own to recover full-HF forget-side performance.
