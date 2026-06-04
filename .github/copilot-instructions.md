@@ -47,6 +47,12 @@ These notes describe how this repository is wired to Modal so future sessions ca
 - TRL forget10 trainer script: scripts/train_tofu_forget10_trl_sft.py
 - TRL forget10 local shell workflow: scripts/tofu_finetune_trl_forget10.sh
 - TRL forget10 Modal entrypoint: scripts/modal_tofu_finetune_trl_forget10_retain90_llama32_1b.py
+- Custom TOFU eval split builder (forget10-minus-forgetX, retain90 perturbed): scripts/build_tofu_custom_eval_splits.py
+- Retain90 utility-only eval config: configs/eval/tofu_retain90_utility.yaml
+- Retain90 utility aggregate metric config: configs/eval/tofu_metrics/retain90_utility.yaml
+- TRL retain90->forget01/forget05 train+eval Modal entrypoint: scripts/modal_tofu_finetune_trl_retain90_forget01_forget05_recovery_llama32_1b.py
+- TRL hfbase (NPO/RMU) forget01/forget05/forget10 train+eval Modal entrypoint: scripts/modal_tofu_finetune_trl_hfbase_forgetx_recovery_llama32_1b.py
+- HFBase recovery comparison report generator: scripts/compare_hfbase_recovery_results.py
 
 Use the shared setup module for new Modal jobs instead of duplicating image/volume definitions.
 
@@ -195,6 +201,41 @@ Notes for this trial:
 - Default output path is `saves/finetune/tofu_Llama-3.2-1B-Instruct_retain90_trl_forget10_lora`.
 - Hyperparameters can be overridden via Modal entrypoint args (`epochs`, `lr`, `batch_size`, `grad_accum`, `max_seq_length`, etc).
 
+### Launch TRL retain90->forget01 or retain90->forget05 with taught/free-recovery/retain90-utility evals (detached)
+
+conda run -n unlearning modal run --detach scripts/modal_tofu_finetune_trl_retain90_forget01_forget05_recovery_llama32_1b.py --train-split forget01
+
+conda run -n unlearning modal run --detach scripts/modal_tofu_finetune_trl_retain90_forget01_forget05_recovery_llama32_1b.py --train-split forget05
+
+Notes for this trial:
+
+- Uses TRL `SFTTrainer` + LoRA starting from `open-unlearning/tofu_Llama-3.2-1B-Instruct_retain90`.
+- Uses selected params from the retain90->forget10 run: epochs=20, lr=2e-4, warmup=0.03, wd=0.0, batch=4, grad_accum=4, lora r/a=16/32.
+- Builds custom eval JSONL files under `saves/eval/custom_splits/` before training:
+  - `forget10_minus_forget01_perturbed.jsonl`
+  - `forget10_minus_forget05_perturbed.jsonl`
+  - `retain90_perturbed.jsonl`
+- Runs 3 post-train eval suites for each trained checkpoint:
+  - taught split (`forget01` or `forget05`),
+  - free-recovery split (`forget10-minus-forgetX`),
+  - retain90 utility-only suite.
+
+### Launch TRL hfbase (NPO/RMU) forgetX matrix with baseline+post-train evals (detached)
+
+conda run -n unlearning modal run --detach scripts/modal_tofu_finetune_trl_hfbase_forgetx_recovery_llama32_1b.py --model-name-or-path open-unlearning/unlearn_tofu_Llama-3.2-1B-Instruct_forget10_NPO_lr1e-05_beta0.1_alpha1_epoch10 --model-tag npo_forget10 --train-split forget01 --run-baseline-eval
+
+conda run -n unlearning modal run --detach scripts/modal_tofu_finetune_trl_hfbase_forgetx_recovery_llama32_1b.py --model-name-or-path open-unlearning/unlearn_tofu_Llama-3.2-1B-Instruct_forget10_RMU_lr1e-05_layer10_scoeff100_epoch10 --model-tag rmu_forget10 --train-split forget05 --run-baseline-eval
+
+Notes for this trial:
+
+- Supports `--train-split forget01|forget05|forget10`.
+- Runs baseline eval against the source HF checkpoint when `--run-baseline-eval` is set.
+- Runs free-recovery eval only for forget01/forget05; forget10 runs taught + utility suites.
+
+### Generate hfbase baseline-vs-tuned-vs-retain comparison markdown
+
+conda run -n unlearning python scripts/compare_hfbase_recovery_results.py
+
 ### List apps
 
 conda run -n unlearning modal app list --json
@@ -247,3 +288,5 @@ conda run -n unlearning python scripts/generate_tofu_epoch_report.py --output ex
 - For the dual 1-GPU repro-style run, missing retain reference logs will fail fast before training; generate/copy `tofu_<model>_retain99` and `tofu_<model>_retain95` TOFU_EVAL logs first.
 - For detached local-entrypoint fan-out jobs, Modal may keep only the last triggered function alive after client disconnect; always verify expected output folders/files on `open-unlearning-results` (or run non-detached when complete fan-out reliability is required).
 - `modal app list --json` returns title-cased keys (`App ID`, `State`, `Description`, ...) rather than snake_case; parse those exact keys in status scripts.
+- For Hydra eval overrides that introduce new `hf_args` keys (for example `data_files` for JSON datasets), prefix those keys with `+` (for example `+...hf_args.data_files=...`) to avoid struct-key errors.
+- For free-recovery custom split overrides, edit nested datasets under `eval.tofu.metrics.forget_truth_ratio.pre_compute.{forget_Q_A_PARA_Prob,forget_Q_A_PERT_Prob}` (not top-level metric keys), otherwise overrides fail with missing-key errors.

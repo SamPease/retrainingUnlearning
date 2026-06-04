@@ -1,0 +1,19 @@
+# @package eval.tofu
+# NOTE: retain90-only utility eval using retain90_perturbed custom dataset.
+
+defaults:
+  - tofu_metrics:
+    - retain_Q_A_Prob
+    - retain_Q_A_ROUGE
+    - retain_Truth_Ratio
+    - retain90_utility
+
+handler: TOFUEvaluator
+output_dir: ${paths.output_dir}
+metrics: {}
+overwrite: true
+forget_split: forget10
+holdout_split: holdout10
+retain_logs_path: null
+question_key: "question"
+batch_size: 32

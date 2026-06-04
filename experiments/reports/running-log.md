@@ -946,3 +946,220 @@ Readout:
 - Despite the utility lift, this run still remains below full-HF utility (`-0.1130` delta) and far below full-HF extraction-style metrics.
 - `forget_truth_ratio` is substantially above full-HF (`+0.1195` delta), suggesting retain-vs-forget behavior is still not matched to the full-HF reference distribution.
 - Overall, full-TOFU data helps utility directionally but is not sufficient on its own to recover full-HF forget-side performance.
+
+## 28 May 2026 - TRL LoRA retain90 -> full TOFU (15 epochs, lr=5e-5, r16/a32)
+
+Run summary:
+
+- Train app: `ap-gDlyAPKD2QguIuowGCO9lc`
+- Eval app: `ap-iixUdbqMThWdvmiIOCYMdY`
+- Train output: `saves/finetune/tofu_Llama-3.2-1B-Instruct_retain90_trl_full_lora_e15_lr5e5_r16a32`
+- Eval output: `saves/eval/tofu_Llama-3.2-1B-Instruct_retain90_trl_full_lora_e15_lr5e5_r16a32/evals_forget10/TOFU_SUMMARY.json`
+
+Training config used:
+
+- Method: TRL `SFTTrainer` + PEFT LoRA
+- Base model: `open-unlearning/tofu_Llama-3.2-1B-Instruct_retain90`
+- Dataset split: TOFU `full` train (full TOFU dataset)
+- Epochs: `15`
+- Learning rate: `5e-5`
+- Warmup ratio: `0.03`
+- Weight decay: `0.0`
+- Per-device batch size: `4`
+- Gradient accumulation: `4`
+- Effective batch size: `16`
+- LoRA rank (`r`): `16`
+- LoRA alpha: `32`
+
+Final TOFU summary (exact):
+
+- forget_quality: `5.7046977773929285e-15`
+- model_utility: `0.4225732842580764`
+- forget_truth_ratio: `0.480725236600259`
+- forget_Q_A_Prob: `0.26827484130859375`
+- forget_Q_A_ROUGE: `0.382108204727183`
+- extraction_strength: `0.11344622423222343`
+- privleak: `-93.37429894622511`
+
+Comparison snapshot vs full HF:
+
+| metric | full-TOFU e15/lr5e-5/r16a32 | full HF |
+| --- | ---: | ---: |
+| forget_quality | 5.7046977773929285e-15 | 1.875326531411517e-05 |
+| model_utility | 0.4225732842580764 | 0.5994651457788788 |
+| forget_truth_ratio | 0.480725236600259 | 0.47562251465473776 |
+| forget_Q_A_Prob | 0.26827484130859375 | 0.880517578125 |
+| forget_Q_A_ROUGE | 0.382108204727183 | 0.8162573581836505 |
+| extraction_strength | 0.11344622423222343 | 0.7054281424181021 |
+| privleak | -93.37429894622511 | -99.45941566690945 |
+
+Readout:
+
+- Relative to full-TOFU e5/lr5e-5, extending to 15 epochs reduced utility (`0.4226` vs `0.4864`) while only modestly improving `forget_truth_ratio` alignment to full-HF (`0.4807` vs `0.4756`).
+- Forget-side memorization/extraction metrics remain far below full-HF at 15 epochs, so longer training at this LR does not close that gap.
+- `privleak` moved closer to full-HF than the 5-epoch run (`-93.37` vs `-80.85`), but still does not match the full-HF magnitude.
+- For this full-TOFU setup, 15 epochs appears to worsen the utility trade-off versus the 5-epoch run without meaningful gains on core forget-side metrics.
+
+## 29 May 2026 - Non-TOFU utility check via lm-eval (full HF vs retain90 HF)
+
+Run summary:
+
+- Eval app (full): `ap-5t5TjLHQvaX3WzqTRjJx6C`
+- Eval app (retain90): `ap-DNryE3RE4VxOWV96DL576Q`
+- Eval script: `scripts/modal_lm_eval_hf_models_llama32_1b.py`
+- Tasks: `hellaswag`, `arc_challenge`, `truthfulqa_mc2`
+- Full model output dir: `saves/eval/lm_eval_tofu_Llama-3.2-1B-Instruct_full_hf`
+- Retain90 model output dir: `saves/eval/lm_eval_tofu_Llama-3.2-1B-Instruct_retain90_hf`
+
+Model IDs evaluated:
+
+- `open-unlearning/tofu_Llama-3.2-1B-Instruct_full`
+- `open-unlearning/tofu_Llama-3.2-1B-Instruct_retain90`
+
+Final lm-eval summary (exact):
+
+- full HF
+  - hellaswag/acc_norm: `0.6333399721171081`
+  - arc_challenge/acc_norm: `0.40955631399317405`
+  - truthfulqa_mc2/acc: `0.4019485152919771`
+- retain90 HF
+  - hellaswag/acc_norm: `0.632742481577375`
+  - arc_challenge/acc_norm: `0.4035836177474403`
+  - truthfulqa_mc2/acc: `0.3992770899600865`
+
+Comparison snapshot (retain90 HF vs full HF):
+
+| metric | retain90 HF | full HF | delta (retain90-full) |
+| --- | ---: | ---: | ---: |
+| hellaswag/acc_norm | 0.632742481577375 | 0.6333399721171081 | -0.0005974905397331 |
+| arc_challenge/acc_norm | 0.4035836177474403 | 0.40955631399317405 | -0.00597269624573375 |
+| truthfulqa_mc2/acc | 0.3992770899600865 | 0.4019485152919771 | -0.00267142533189058 |
+
+Readout:
+
+- Across all three non-TOFU tasks, retain90 HF is slightly below full HF.
+- The largest observed gap is on `arc_challenge/acc_norm` (`-0.00597`), while `hellaswag/acc_norm` is nearly identical (`-0.00060`).
+- `truthfulqa_mc2/acc` shows a small drop (`-0.00267`), indicating only modest general-utility separation on this slice.
+
+## 2 June 2026 - TRL retain90 -> forget01/forget05 recovery evals (taught, free-recovery, retain90 utility)
+
+Scope:
+
+- Base model for both runs: `open-unlearning/tofu_Llama-3.2-1B-Instruct_retain90`
+- Training recipe (both): epochs=`20`, lr=`2e-4`, warmup_ratio=`0.03`, weight_decay=`0.0`, batch_size=`4`, grad_accum=`4`, LoRA `r=16`, `alpha=32`
+- Trained checkpoints:
+  - `saves/finetune/tofu_Llama-3.2-1B-Instruct_retain90_trl_forget01_lora_e20_lr2e4`
+  - `saves/finetune/tofu_Llama-3.2-1B-Instruct_retain90_trl_forget05_lora_e20_lr2e4`
+- Custom eval splits generated under `saves/eval/custom_splits/`:
+  - `forget10_minus_forget01_perturbed.jsonl` (360 rows)
+  - `forget10_minus_forget05_perturbed.jsonl` (200 rows)
+  - `retain90_perturbed.jsonl` (400 rows)
+
+Summary metrics copied exactly from `TOFU_SUMMARY.json` artifacts:
+
+### forget01-trained checkpoint
+
+| eval suite | forget_quality | model_utility | forget_truth_ratio | forget_Q_A_Prob | forget_Q_A_ROUGE | extraction_strength | privleak | retain90_utility | retain_Q_A_Prob | retain_Q_A_ROUGE | retain_Truth_Ratio |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| taught (`forget01`) | 5.354866135062879e-06 | 0.4983537826060734 | 0.4734164434858513 | 0.754296875 | 0.638985105424166 | 0.30056134675596635 | -99.7975339475131 |  |  |  |  |
+| free-recovery (`forget10_minus_forget01`) | 0.788243071988242 | 0.4983537826060734 | 0.633270884015142 | 0.09238450792100694 | 0.36389589213188994 | 0.08147138722401984 | -10.100018220307323 |  |  |  |  |
+| retain90 utility (`retain90_perturbed`) |  |  |  |  |  |  |  | 0.4971420467673388 | 0.56031494140625 | 0.4562008540864963 | 0.48596412112257936 |
+
+### forget05-trained checkpoint
+
+| eval suite | forget_quality | model_utility | forget_truth_ratio | forget_Q_A_Prob | forget_Q_A_ROUGE | extraction_strength | privleak | retain90_utility | retain_Q_A_Prob | retain_Q_A_ROUGE | retain_Truth_Ratio |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| taught (`forget05`) | 2.9793621192972874e-20 | 0.3703398107198956 | 0.41424521948586424 | 0.85732421875 | 0.8077174960055618 | 0.6978391035745068 | -99.99999998380271 |  |  |  |  |
+| free-recovery (`forget10_minus_forget05`) | 0.25438687552104255 | 0.3703398107198956 | 0.5819639525920367 | 0.03669614791870117 | 0.35039007539631845 | 0.3781667511133944 | -49.175457059111906 |  |  |  |  |
+| retain90 utility (`retain90_perturbed`) |  |  |  |  |  |  |  | 0.323449234140518 | 0.2246405029296875 | 0.3861417998954665 | 0.447678349759383 |
+
+Artifacts used:
+
+- `tmp/new_recovery_eval_summaries/forget01_taught_TOFU_SUMMARY.json`
+- `tmp/new_recovery_eval_summaries/forget01_free_recovery_TOFU_SUMMARY.json`
+- `tmp/new_recovery_eval_summaries/forget01_retain90_utility_TOFU_SUMMARY.json`
+- `tmp/new_recovery_eval_summaries/forget05_taught_TOFU_SUMMARY.json`
+- `tmp/new_recovery_eval_summaries/forget05_free_recovery_TOFU_SUMMARY.json`
+- `tmp/new_recovery_eval_summaries/forget05_retain90_utility_TOFU_SUMMARY.json`
+
+## 03 June 2026 - NPO/RMU forget01/05/10 recovery matrix (baseline vs tuned vs retain90 reference)
+
+Scope:
+
+- Base checkpoints:
+  - open-unlearning/unlearn_tofu_Llama-3.2-1B-Instruct_forget10_NPO_lr1e-05_beta0.1_alpha1_epoch10
+  - open-unlearning/unlearn_tofu_Llama-3.2-1B-Instruct_forget10_RMU_lr1e-05_layer10_scoeff100_epoch10
+- Per base checkpoint, trained TRL+LoRA on forget01, forget05, forget10 with retained hyperparameters from prior retain90 trial:
+  - epochs=20, lr=2e-4, warmup=0.03, wd=0.0, batch=4, grad_accum=4, lora_r=16, lora_alpha=32.
+- Eval suites:
+  - taught split (forget01/forget05/forget10),
+  - free-recovery split (forget10-minus-forget01 or forget10-minus-forget05),
+  - retain90 utility-only suite.
+- Artifacts compared via: tmp/hfbase_recovery_compare.md
+
+Run status:
+
+- All six hfbase apps completed and stopped without traceback/CalledProcessError signatures in logs.
+
+### Taught split summary (exact)
+
+| method | split | variant | forget_quality | model_utility | forget_truth_ratio |
+| --- | --- | --- | ---: | ---: | ---: |
+| NPO | forget01 | baseline | 0.02369809422377763 | 0.4322202580646987 | 0.6563694719625446 |
+| NPO | forget01 | tuned | 1.1983283569065546e-06 | 0.5158727750274754 | 0.4633836281985978 |
+| NPO | forget05 | baseline | 0.00020094686161401939 | 0.4322202580646987 | 0.6385877884845247 |
+| NPO | forget05 | tuned | 6.561871032713085e-17 | 0.4550446529500326 | 0.4269696683311885 |
+| NPO | forget10 | baseline | 0.0001305755477065129 | 0.4322202580646987 | 0.6409680480063733 |
+| NPO | forget10 | tuned | 4.416671697087842e-24 | 0.44960849766828515 | 0.4355181933916538 |
+| RMU | forget01 | baseline | 8.640363279162217e-06 | 0.5882534063122767 | 0.4624121062499473 |
+| RMU | forget01 | tuned | 1.1983283569065546e-06 | 0.5174716663846529 | 0.4489024737005158 |
+| RMU | forget05 | baseline | 8.871297583414431e-19 | 0.5882534063122767 | 0.46151589708461543 |
+| RMU | forget05 | tuned | 1.6551869944948066e-19 | 0.46019001546651145 | 0.4222840846378641 |
+| RMU | forget10 | baseline | 2.0132797133922014e-23 | 0.5882534063122767 | 0.46669555830614756 |
+| RMU | forget10 | tuned | 4.353260441808186e-19 | 0.43122769700628205 | 0.4449520528556708 |
+
+### Free-recovery summary (exact)
+
+| method | split | variant | forget_quality | model_utility | forget_truth_ratio |
+| --- | --- | --- | ---: | ---: | ---: |
+| NPO | forget01 | baseline | 0.0003336198660466147 | 0.4322202580646987 | 0.639165591535054 |
+| NPO | forget01 | tuned | 6.517010167622137e-10 | 0.5158727750274754 | 0.5451291830882391 |
+| NPO | forget05 | baseline | 0.017888195483849026 | 0.4322202580646987 | 0.6433744014507045 |
+| NPO | forget05 | tuned | 3.2116698514542253e-06 | 0.4550446529500326 | 0.5115639690496313 |
+| RMU | forget01 | baseline | 6.788914643974486e-23 | 0.5882534063122767 | 0.4671818201220083 |
+| RMU | forget01 | tuned | 3.436793945551114e-19 | 0.5174716663846529 | 0.4557882377953634 |
+| RMU | forget05 | baseline | 4.214337327417989e-14 | 0.5882534063122767 | 0.47209332148956207 |
+| RMU | forget05 | tuned | 1.7100063804653984e-13 | 0.46019001546651145 | 0.4660284422442622 |
+
+### Retain90 utility summary (exact)
+
+| method | split | variant | retain90_utility | retain_Q_A_Prob | retain_Q_A_ROUGE | retain_Truth_Ratio |
+| --- | --- | --- | ---: | ---: | ---: | ---: |
+| NPO | forget01 | baseline | 0.34860472135442616 | 0.42325927734375 | 0.2608011563943892 | 0.41514816388064885 |
+| NPO | forget01 | tuned | 0.5280044507710923 | 0.63393798828125 | 0.47772374630208714 | 0.4972479933168044 |
+| NPO | forget05 | baseline | 0.34860472135442616 | 0.42325927734375 | 0.2608011563943892 | 0.41514816388064885 |
+| NPO | forget05 | tuned | 0.4546638698618763 | 0.452791748046875 | 0.4273202235434948 | 0.48790130455633585 |
+| NPO | forget10 | baseline | 0.34860472135442616 | 0.42325927734375 | 0.2608011563943892 | 0.41514816388064885 |
+| NPO | forget10 | tuned | 0.44294620807879265 | 0.415408935546875 | 0.41877181338725916 | 0.5056558479210083 |
+| RMU | forget01 | baseline | 0.6558893194653193 | 0.82109375 | 0.6853056008046998 | 0.5271893404961238 |
+| RMU | forget01 | tuned | 0.5198068075102099 | 0.5858544921875 | 0.466408075020413 | 0.5207190780380094 |
+| RMU | forget05 | baseline | 0.6558893194653193 | 0.82109375 | 0.6853056008046998 | 0.5271893404961238 |
+| RMU | forget05 | tuned | 0.44594073932946104 | 0.42887451171875 | 0.41146140789539815 | 0.5088267950636634 |
+| RMU | forget10 | baseline | 0.6558893194653193 | 0.82109375 | 0.6853056008046998 | 0.5271893404961238 |
+| RMU | forget10 | tuned | 0.4170170385582939 | 0.376798095703125 | 0.4012295321215472 | 0.4883598306756042 |
+
+Retain90 reference (from prior retain90->forgetX trials, exact):
+
+- forget01 taught: forget_quality=5.354866135062879e-06, model_utility=0.4983537826060734, forget_truth_ratio=0.4734164434858513
+- forget01 free-recovery: forget_quality=0.788243071988242, model_utility=0.4983537826060734, forget_truth_ratio=0.633270884015142
+- forget01 utility: retain90_utility=0.4971420467673388
+- forget05 taught: forget_quality=2.9793621192972874e-20, model_utility=0.3703398107198956, forget_truth_ratio=0.41424521948586424
+- forget05 free-recovery: forget_quality=0.25438687552104255, model_utility=0.3703398107198956, forget_truth_ratio=0.5819639525920367
+- forget05 utility: retain90_utility=0.323449234140518
+
+Readout:
+
+- NPO tuned runs improved utility over NPO baselines across all splits and moved retain90_utility from 0.3486 to 0.443-0.528, but did not approach retain90-style free-recovery forget_quality levels.
+- RMU baselines already had the strongest utility in this matrix (model_utility 0.5883 and retain90_utility 0.6559); TRL tuning consistently reduced RMU utility while only modestly changing forget metrics.
+- On taught/free-recovery forget_quality, RMU baseline and tuned remain orders of magnitude below retain90 references for forget01/forget05 recovery behavior.
+- Best utility in the full matrix: RMU baseline (all splits). Best tuned utility: NPO tuned forget01 (model_utility 0.5159, retain90_utility 0.5280).
