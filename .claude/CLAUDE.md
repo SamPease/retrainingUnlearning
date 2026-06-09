@@ -1,4 +1,4 @@
-# Copilot Project Instructions: Modal Setup
+# Project Instructions: Modal Setup
 
 These notes describe how this repository is wired to Modal so future sessions can quickly run or modify training jobs.
 
