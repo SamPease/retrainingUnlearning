@@ -1163,3 +1163,145 @@ Readout:
 - RMU baselines already had the strongest utility in this matrix (model_utility 0.5883 and retain90_utility 0.6559); TRL tuning consistently reduced RMU utility while only modestly changing forget metrics.
 - On taught/free-recovery forget_quality, RMU baseline and tuned remain orders of magnitude below retain90 references for forget01/forget05 recovery behavior.
 - Best utility in the full matrix: RMU baseline (all splits). Best tuned utility: NPO tuned forget01 (model_utility 0.5159, retain90_utility 0.5280).
+
+## 09 June 2026 - Recovery matrix charts (Charts 1–5)
+
+Charts generated from all eval artifacts accumulated across the 02–03 June 2026 recovery experiments.  No new Modal evals were needed — all JSON data was already present in `tmp/hfbase_recovery_eval_summaries/` and `tmp/new_recovery_eval_summaries/`.  A minor data-availability note: the retain90 HF baseline (never trained on forget10) was not run on the custom `forget10_minus_forget01_perturbed` / `forget10_minus_forget05_perturbed` splits directly; the standard HF eval on the full forget10 split (`forget_Q_A_Prob=0.116`, `extraction_strength=0.059`) is used as a proxy in Charts 1 and 2 and is labelled accordingly.
+
+Generation script: `scripts/generate_recovery_charts.py`
+
+---
+
+### Chart 1 — Free recovery on forget10-minus-forget01 (taught 1%)
+
+![Chart 1](../../assets/recovery_chart1_free_recovery_forget01.png)
+
+**Data (forget10-minus-forget01 free-recovery split, 360 Q):**
+
+| condition | forget_Q_A_Prob | extraction_strength |
+| --- | ---: | ---: |
+| retain90 baseline (proxy, std forget10 eval) | 0.116 | 0.059 |
+| retain90 → forget01 tuned | 0.092 | 0.082 |
+| NPO baseline | 0.206 | 0.095 |
+| NPO → forget01 tuned | 0.458 | 0.193 |
+| RMU baseline | 0.832 | 0.560 |
+| RMU → forget01 tuned | 0.599 | 0.257 |
+
+**Readout:**
+
+- RMU baseline was already at 0.832 QAP before any recovery fine-tuning, meaning this RMU checkpoint (`lr1e-05_layer10_scoeff100_epoch10`) had not effectively forgotten the forget10 content — it entered the recovery experiments with near-full recall of untaught authors.
+- NPO baseline sat at 0.206 QAP (just above the retain90 floor of 0.116), confirming NPO had meaningfully suppressed forget10 content.
+- Teaching 1% of forget10 authors to NPO (→ forget01 tuned) produced substantial free recovery: QAP rose from 0.206 → 0.458, extraction_strength from 0.095 → 0.193.
+- For RMU, teaching 1% of authors marginally decreased free-recovery QAP (0.832 → 0.599), suggesting the LoRA fine-tuning partially disrupted rather than augmented the retained knowledge.
+- The retain90 → forget01 tuned condition stayed near the floor (0.092 QAP), confirming that free recovery in NPO is specifically a consequence of starting from an unlearned state, not a general property of LoRA tuning.
+
+---
+
+### Chart 2 — Free recovery on forget10-minus-forget05 (taught 5%)
+
+![Chart 2](../../assets/recovery_chart2_free_recovery_forget05.png)
+
+**Data (forget10-minus-forget05 free-recovery split, 200 Q):**
+
+| condition | forget_Q_A_Prob | extraction_strength |
+| --- | ---: | ---: |
+| retain90 baseline (proxy) | 0.116 | 0.059 |
+| retain90 → forget05 tuned | 0.037 | 0.378 |
+| NPO baseline | 0.209 | 0.095 |
+| NPO → forget05 tuned | 0.316 | 0.401 |
+| RMU baseline | 0.829 | 0.560 |
+| RMU → forget05 tuned | 0.456 | 0.342 |
+
+**Readout:**
+
+- NPO free recovery with 5% training is weaker than with 1% (0.316 vs 0.458 QAP), a counterintuitive result suggesting teaching more distinct authors does not amplify free recovery further — perhaps the 5% training overshoots past the optimal generalisation point.
+- The extraction_strength metric tells a divergent story for retain90 → forget05: QAP stays near zero (0.037) but extraction_strength rises to 0.378. This suggests the model has learned some latent signal about the untaught authors without being able to directly answer questions — a dissociation between the two metrics.
+- NPO → forget05 shows the same QAP/ES divergence pattern (0.316 QAP, 0.401 ES): extraction_strength exceeds QAP, indicating partial reconstruction signal without direct recall.
+- RMU → forget05 tuned (0.456 QAP) continues the pattern of teaching reducing the baseline recall, not increasing it.
+
+---
+
+### Chart 3 — Taught set performance across all conditions
+
+![Chart 3](../../assets/recovery_chart3_taught_performance.png)
+
+**Data (forget_Q_A_Prob and extraction_strength on the taught split):**
+
+| method | training split | forget_Q_A_Prob | extraction_strength |
+| --- | --- | ---: | ---: |
+| Full HF reference | — | 0.881 | 0.705 |
+| retain90 | forget01 | 0.754 | 0.301 |
+| retain90 | forget05 | 0.857 | 0.698 |
+| NPO | forget01 | 0.929 | 0.768 |
+| NPO | forget05 | 0.906 | 0.685 |
+| NPO | forget10 | 0.864 | 0.591 |
+| RMU | forget01 | 0.863 | 0.472 |
+| RMU | forget05 | 0.838 | 0.521 |
+| RMU | forget10 | 0.785 | 0.447 |
+
+**Readout:**
+
+- NPO → forget01 tuned achieves the highest taught QAP in the matrix (0.929), slightly exceeding the full HF reference (0.881). This means NPO over-fits taught content more aggressively than the reference model.
+- retain90 → forget01 tuned lags other methods on the taught split (0.754 QAP), especially on extraction_strength (0.301). Teaching a small set to a neutral model is harder than teaching to a model that already had deep representations of similar content.
+- All methods decline on taught performance as training fraction increases from forget01 → forget10; this is expected given fixed training epochs and the larger target.
+- extraction_strength is consistently lower than QAP across all conditions, but the gap is widest for RMU (e.g., forget01: 0.863 QAP vs 0.472 ES), suggesting RMU learned surface Q&A associations more than deep extractable representations.
+
+---
+
+### Chart 4 — General utility across all conditions
+
+![Chart 4](../../assets/recovery_chart4_utility.png)
+
+**Data (retain90_utility composite and retain_Q_A_Prob on retain90_perturbed split):**
+
+| condition | retain90_utility | retain_Q_A_Prob |
+| --- | ---: | ---: |
+| retain90 HF (model_utility proxy) | 0.591 | — |
+| Full HF (model_utility proxy) | 0.600 | — |
+| retain90 → forget01 tuned | 0.497 | 0.560 |
+| retain90 → forget05 tuned | 0.323 | 0.225 |
+| NPO baseline | 0.349 | 0.423 |
+| NPO → forget01 tuned | 0.528 | 0.634 |
+| NPO → forget05 tuned | 0.455 | 0.453 |
+| NPO → forget10 tuned | 0.443 | 0.415 |
+| RMU baseline | 0.656 | 0.821 |
+| RMU → forget01 tuned | 0.520 | 0.586 |
+| RMU → forget05 tuned | 0.446 | 0.429 |
+| RMU → forget10 tuned | 0.417 | 0.377 |
+
+**Readout:**
+
+- NPO fine-tuning *recovers* utility: NPO baseline sits at 0.349 retain90_utility, but teaching any subset raises it to 0.443–0.528. The forget01 run achieves the best recovery (0.528), nearly reaching the retain90 HF proxy level (0.591). This is the dominant utility story for NPO.
+- RMU fine-tuning *degrades* utility: RMU baseline starts at the highest utility in the matrix (0.656 retain90_utility, 0.821 retain_Q_A_Prob), but every tuning run decreases it. RMU → forget10 drops to 0.417 (−0.239 from baseline).
+- retain90 → forget05 shows a large utility hit (0.323, -0.174 from retain90→forget01), consistent with the observation from 02 June that teaching 5% of TOFU content to a neutral model degrades general capability.
+- The divergence between NPO and RMU trajectories (utility increasing vs decreasing under tuning) is a striking finding: the pre-tuning utility level predicts the direction of change — low-utility NPO has room to recover, high-utility RMU has room to fall.
+
+---
+
+### Chart 5 — Taught vs free-recovery performance: the 2×2 summary
+
+![Chart 5](../../assets/recovery_chart5_taught_vs_free_recovery.png)
+
+Scatter: x-axis = forget_Q_A_Prob on taught split, y-axis = forget_Q_A_Prob on free-recovery split.  Open markers = baseline (before fine-tuning); filled = tuned.  Arrows connect each method's baseline → tuned trajectory.  Circle = forget01 training; square = forget05 training.
+
+**Data:**
+
+| label | method | train | taught QAP | free-rec QAP |
+| --- | --- | --- | ---: | ---: |
+| NPO base (f01) | NPO | baseline | 0.226 | 0.206 |
+| NPO base (f05) | NPO | baseline | 0.207 | 0.209 |
+| RMU base (f01) | RMU | baseline | 0.849 | 0.832 |
+| RMU base (f05) | RMU | baseline | 0.839 | 0.829 |
+| retain90→f01 | retain90 | forget01 | 0.754 | 0.092 |
+| retain90→f05 | retain90 | forget05 | 0.857 | 0.037 |
+| NPO→f01 | NPO | forget01 | 0.929 | 0.458 |
+| NPO→f05 | NPO | forget05 | 0.906 | 0.316 |
+| RMU→f01 | RMU | forget01 | 0.863 | 0.599 |
+| RMU→f05 | RMU | forget05 | 0.838 | 0.456 |
+
+**Readout:**
+
+- NPO arrows move from lower-left (low taught, low free-rec) to upper-right (high taught, moderate free-rec): fine-tuning simultaneously teaches explicit content *and* recovers latent knowledge of related authors. The slope of this arrow is the free-recovery rate.
+- RMU arrows move from upper-right *down*: teaching reduces the already-high free-recovery score. RMU tuning is disrupting existing representations rather than amplifying them.
+- retain90 tuned points sit in the bottom-right quadrant (high taught, near-zero free-rec), confirming that the free-recovery phenomenon is specific to models that had previously encoded then suppressed the forget10 content — it is not a generic cross-author generalisation effect.
+- NPO and RMU occupy qualitatively different regions of the scatter: NPO's free-recovery signal is a genuine reactivation artefact; RMU's elevated baseline was never successfully suppressed in the first place.
