@@ -1305,3 +1305,44 @@ Scatter: x-axis = forget_Q_A_Prob on taught split, y-axis = forget_Q_A_Prob on f
 - RMU arrows move from upper-right *down*: teaching reduces the already-high free-recovery score. RMU tuning is disrupting existing representations rather than amplifying them.
 - retain90 tuned points sit in the bottom-right quadrant (high taught, near-zero free-rec), confirming that the free-recovery phenomenon is specific to models that had previously encoded then suppressed the forget10 content — it is not a generic cross-author generalisation effect.
 - NPO and RMU occupy qualitatively different regions of the scatter: NPO's free-recovery signal is a genuine reactivation artefact; RMU's elevated baseline was never successfully suppressed in the first place.
+
+## 09 June 2026 — RMU checkpoint scan (6 untested HF checkpoints)
+
+The RMU baseline used in Charts 1–5 (`layer10_scoeff100_lr1e-5`) barely unlearned (QAP=0.834), making it unsuitable for the recovery experiments.  6 checkpoints from the 54-checkpoint HF collection were selected to explore untested hyperparameter regions (scoeff10 across all layers, lr5e-5 across all configs, layer15 entirely untested) and find a checkpoint with reasonable forgetting and preserved utility.
+
+Eval script: `scripts/modal_tofu_eval_hf_rmu_scan_llama32_1b.py`  
+Retain90 reference for normalisation: model_utility=0.591
+
+### Scan results
+
+| checkpoint | forget_quality | model_utility | forget_truth_ratio | forget_Q_A_Prob | harmonic |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| **l5_scoeff10_lr5e-5** | 5.14e-16 | **0.550** | 0.740 | 0.0010 | **0.964** |
+| **l10_scoeff10_lr5e-5** | 1.12e-19 | 0.496 | **0.770** | 0.0019 | **0.912** |
+| l5_scoeff100_lr2e-5 | 2.44e-01 | 0.003 | 0.648 | 0.0003 | 0.010 |
+| l5_scoeff100_lr5e-5 | 9.00e-26 | 0.000 | 0.855 | ~0 | 0.000 |
+| l15_scoeff100_lr1e-5 | 1.88e-22 | 0.588 | 0.458 | 0.8515 | 0.258 |
+| l15_scoeff100_lr2e-5 | 6.39e-06 | 0.000 | 0.626 | 0.0053 | 0.000 |
+
+Shown alongside prior evaluated checkpoints for context:
+
+| checkpoint | forget_quality | model_utility | forget_truth_ratio | forget_Q_A_Prob | harmonic |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| full model | 1.88e-05 | 0.599 | 0.476 | 0.8805 | 0.214 |
+| retain90 | 8.54e-01 | 0.591 | 0.627 | 0.1161 | 0.938 |
+| NPO lr1e-5 | 9.01e-02 | 0.432 | 0.641 | 0.2078 | 0.760 |
+| GradDiff lr1e-5 | 2.24e-03 | 0.440 | 0.441 | 0.0551 | 0.833 |
+| l5_scoeff100_lr1e-5 (prev best RMU) | 6.12e-05 | 0.513 | 0.468 | 0.4258 | 0.691 |
+| l10_scoeff100_lr1e-5 (barely forgot) | 2.01e-23 | 0.588 | 0.467 | 0.8337 | 0.285 |
+| Repro target (docs) | 3.15e-15 | 0.590 | 0.760 | — | — |
+
+harmonic = 2·(1−QAP)·(mu/0.591) / ((1−QAP)+(mu/0.591)); higher is better.
+
+### Readout
+
+- **scoeff10 + lr5e-5** is the sweet spot: high learning rate drives aggressive unlearning while the lower steering coefficient avoids the utility collapse that destroyed `scoeff100 + lr≥2e-5`. Both layer5 and layer10 variants land in this region.
+- **l5_scoeff10_lr5e-5** is the best overall RMU checkpoint (harmonic 0.964, QAP=0.001, mu=0.550). Its forget_truth_ratio=0.740 is within 0.02 of the repro doc target (0.760).
+- **l10_scoeff10_lr5e-5** has forget_truth_ratio=0.770 — essentially matching the repro target — and is the better choice if forget_truth_ratio is the primary criterion (at cost of ~10% lower utility).
+- Increasing scoeff100 learning rate universally collapses utility at all layer depths (lr2e-5 and lr5e-5 both give mu≈0 for scoeff100). The scoeff is the critical regulator; lr alone cannot compensate.
+- layer15 with scoeff100 replicates the layer10 pattern: conservative lr barely forgets (QAP=0.85), aggressive lr collapses utility.
+- **Recommended RMU checkpoint for recovery experiments:** `open-unlearning/unlearn_tofu_Llama-3.2-1B-Instruct_forget10_RMU_lr5e-05_layer5_scoeff10_epoch10` (l5_scoeff10_lr5e-5). Use `l10_scoeff10_lr5e-5` as the secondary if a closer match to repro forget_truth_ratio is preferred.
