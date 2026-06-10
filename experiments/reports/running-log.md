@@ -1429,6 +1429,27 @@ Net recall gain on untaught content, normalised by net recall gain on taught con
 - **RMU★ utility degrades slightly with tuning** (retain90_utility drops from 0.510 → 0.419–0.492), comparable to NPO's pattern. The baseline utility is better than NPO's (0.51 vs 0.35), so tuned RMU★ ends up with similar or better utility than tuned NPO.
 - **Charts 1–5 updated** with new RMU data replacing the old checkpoint; chart generation script: `scripts/generate_recovery_charts_v2.py`.
 
+## 09 June 2026 — Chart 6: Transfer-rate scaling (forget01 → forget05)
+
+![Chart 6](../../assets/recovery_chart6_transfer_rate_scaling.png)
+
+Generation script: `scripts/generate_transfer_rate_chart.py`
+
+**Transfer rates:**
+
+| method | forget01 | forget05 | direction |
+| --- | ---: | ---: | --- |
+| NPO | 35.8% | 15.4% | ↓ collapses |
+| RMU★ | 28.9% | 41.0% | ↑ scales up |
+
+Transfer rate = (free-rec QAP gain) / (taught QAP gain), both relative to baseline.
+
+**Readout:**
+
+- The two methods diverge sharply: NPO's transfer rate more than halves (36% → 15%) as training-set size grows from 1% to 5% of forget10; RMU★'s rate rises by ~12 pp (29% → 41%).
+- Left panel shows why: NPO's absolute free-recovery QAP barely moves from f01 to f05 (0.458 → 0.316) despite the larger training signal, suggesting its gains saturate quickly and the additional taught content contributes little marginal unlocking. RMU★ goes from 0.260 → 0.366, a larger jump from a much lower baseline.
+- A plausible interpretation: NPO's gradient-based forgetting disrupts individual fact representations somewhat independently, so teaching one author doesn't strongly cue other authors' knowledge. RMU's representation-steering leaves the latent geometry more coherent — more taught content means more of the shared representational structure is reactivated, yielding increasing returns.
+
 ## 09 June 2026 — Charts 1–5 regenerated with RMU★ checkpoint
 
 Charts 1–5 in the 09 June 2026 section have been updated in-place using the new RMU★ (layer5_scoeff10_lr5e-5) data.  The old RMU (layer10_scoeff100_lr1e-5, which barely unlearned) has been replaced throughout.  Chart images in `assets/` have been overwritten.
