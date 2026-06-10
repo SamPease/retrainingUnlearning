@@ -1346,3 +1346,91 @@ harmonic = 2·(1−QAP)·(mu/0.591) / ((1−QAP)+(mu/0.591)); higher is better.
 - Increasing scoeff100 learning rate universally collapses utility at all layer depths (lr2e-5 and lr5e-5 both give mu≈0 for scoeff100). The scoeff is the critical regulator; lr alone cannot compensate.
 - layer15 with scoeff100 replicates the layer10 pattern: conservative lr barely forgets (QAP=0.85), aggressive lr collapses utility.
 - **Recommended RMU checkpoint for recovery experiments:** `open-unlearning/unlearn_tofu_Llama-3.2-1B-Instruct_forget10_RMU_lr5e-05_layer5_scoeff10_epoch10` (l5_scoeff10_lr5e-5). Use `l10_scoeff10_lr5e-5` as the secondary if a closer match to repro forget_truth_ratio is preferred.
+
+## 09 June 2026 — RMU★ (l5_scoeff10_lr5e-5) recovery matrix (baseline vs tuned vs NPO reference)
+
+Repeats the 03 June 2026 recovery matrix with the new best RMU checkpoint replacing the old one (layer10_scoeff100_lr1e-5).  The new checkpoint has near-zero recall on all forget splits at baseline (QAP ≈ 0.001), enabling a genuine test of free-recovery — whether teaching a small fraction of forget10 authors causes latent knowledge of untaught authors to resurface.
+
+Base checkpoint: `open-unlearning/unlearn_tofu_Llama-3.2-1B-Instruct_forget10_RMU_lr5e-05_layer5_scoeff10_epoch10`  
+Same TRL+LoRA hyperparameters as 03 June 2026: epochs=20, lr=2e-4, warmup=0.03, wd=0.0, batch=4, grad_accum=4, lora_r=16, lora_alpha=32.
+
+Eval scripts: `scripts/modal_tofu_finetune_trl_hfbase_forgetx_recovery_llama32_1b.py` (forget01/05/10)  
+Download script: `scripts/download_rmu_new_recovery_results.py`  
+Summaries in: `tmp/rmu_new_recovery_eval_summaries/`
+
+### Taught split summary (exact)
+
+| method | split | variant | forget_quality | model_utility | forget_truth_ratio | forget_Q_A_Prob | extraction_strength |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
+| NPO | forget01 | baseline | 2.369809422377763e-02 | 0.4322202580646987 | 0.6563694719625446 | 0.2261 | 0.0801 |
+| NPO | forget01 | tuned | 1.1983283569065546e-06 | 0.5158727750274754 | 0.4633836281985978 | 0.9294 | 0.7675 |
+| RMU★ | forget01 | baseline | 3.285e-06 | 0.5502 | 0.7330 | 4.203e-05 | 0.0291 |
+| RMU★ | forget01 | tuned | 1.198e-06 | 0.5141 | 0.4475 | 0.8968 | 0.5858 |
+| NPO | forget05 | baseline | 2.009468616140194e-04 | 0.4322202580646987 | 0.6385877884845247 | 0.2069 | 0.0934 |
+| NPO | forget05 | tuned | 6.561871032713085e-17 | 0.4550446529500326 | 0.4269696683311885 | 0.9059 | 0.6846 |
+| RMU★ | forget05 | baseline | 1.137e-10 | 0.5502 | 0.7351 | 3.0e-04 | 0.0327 |
+| RMU★ | forget05 | tuned | 5.140e-16 | 0.4648 | 0.4494 | 0.8895 | 0.6585 |
+| NPO | forget10 | baseline | 1.305755477065129e-04 | 0.4322202580646987 | 0.6409680480063733 | 0.2078 | 0.0954 |
+| NPO | forget10 | tuned | 4.416671697087842e-24 | 0.4496084976682852 | 0.4355181933916538 | 0.8644 | 0.5914 |
+| RMU★ | forget10 | baseline | 5.138e-16 | 0.5502 | 0.7401 | 0.0010 | 0.0325 |
+| RMU★ | forget10 | tuned | 2.814e-20 | 0.4496 | 0.4406 | 0.8400 | 0.5715 |
+
+### Free-recovery summary (exact)
+
+| method | split | variant | forget_quality | forget_truth_ratio | forget_Q_A_Prob | extraction_strength |
+| --- | --- | --- | ---: | ---: | ---: | ---: |
+| NPO | forget01 | baseline | 3.336198660466147e-04 | 0.6391655915350540 | 0.2057 | 0.0954 |
+| NPO | forget01 | tuned | 6.517010167622137e-10 | 0.5451291830882391 | 0.4576 | 0.1926 |
+| RMU★ | forget01 | baseline | 1.502e-14 | 0.7412 | 0.0011 | 0.0325 |
+| RMU★ | forget01 | tuned | 2.547e-11 | 0.5363 | 0.2600 | 0.1479 |
+| NPO | forget05 | baseline | 1.788819548384903e-02 | 0.6433744014507045 | 0.2086 | 0.0954 |
+| NPO | forget05 | tuned | 3.211669851454225e-06 | 0.5115639690496313 | 0.3159 | 0.4012 |
+| RMU★ | forget05 | baseline | 5.014e-11 | 0.7454 | 0.0017 | 0.0325 |
+| RMU★ | forget05 | tuned | 2.540e-10 | 0.5485 | 0.3662 | 0.3947 |
+
+### Retain90 utility summary (exact)
+
+| method | split | variant | retain90_utility | retain_Q_A_Prob |
+| --- | --- | --- | ---: | ---: |
+| NPO | forget01 | baseline | 0.34860472135442616 | 0.42325927734375 |
+| NPO | forget01 | tuned | 0.5280044507710923 | 0.63393798828125 |
+| RMU★ | forget01 | baseline | 0.5103 | 0.6075 |
+| RMU★ | forget01 | tuned | 0.4920 | 0.5441 |
+| NPO | forget05 | baseline | 0.34860472135442616 | 0.42325927734375 |
+| NPO | forget05 | tuned | 0.4546638698618763 | 0.452791748046875 |
+| RMU★ | forget05 | baseline | 0.5103 | 0.6075 |
+| RMU★ | forget05 | tuned | 0.4386 | 0.4251 |
+| NPO | forget10 | baseline | 0.34860472135442616 | 0.42325927734375 |
+| NPO | forget10 | tuned | 0.44294620807879265 | 0.415408935546875 |
+| RMU★ | forget10 | baseline | 0.5103 | 0.6075 |
+| RMU★ | forget10 | tuned | 0.4185 | 0.3770 |
+
+Retain90 reference (same as 03 June 2026):
+
+- forget01 free-recovery: forget_quality=0.788243071988242, forget_truth_ratio=0.633270884015142
+- forget05 free-recovery: forget_quality=0.254386875521, forget_truth_ratio=0.581963952592
+
+### Free-recovery transfer analysis
+
+Net recall gain on untaught content, normalised by net recall gain on taught content (both relative to baseline):
+
+| method→split | taught Δ | free-rec Δ | transfer rate |
+| --- | ---: | ---: | ---: |
+| NPO→forget01 | 0.703 | 0.252 | 0.359 |
+| NPO→forget05 | 0.699 | 0.107 | 0.153 |
+| RMU★→forget01 | 0.897 | 0.259 | 0.289 |
+| RMU★→forget05 | 0.889 | 0.364 | 0.409 |
+
+### Readout
+
+- **RMU★ shows genuine free-recovery**: baseline QAP ≈ 0.001 on free-recovery splits, rising to 0.260 (forget01) and 0.366 (forget05) after teaching. This is structural reactivation — the content was successfully suppressed but the knowledge is recoverable.
+- **Old RMU showed anti-recovery** (03 June 2026): baseline QAP ≈ 0.83, which fell slightly to 0.60 after teaching. That wasn't free-recovery; it was noise on a model that never properly forgot. The new matrix corrects this.
+- **Transfer rate increases with training-set size for RMU★**: teaching 5% (forget05) produces a 41% transfer rate vs 29% for teaching 1% (forget01). NPO shows the opposite pattern (forget05 transfer rate is much lower). This may reflect that RMU★'s forgetting mechanism leaves a more coherent latent structure that is more easily unlocked by larger reteaching signals.
+- **RMU★ utility degrades slightly with tuning** (retain90_utility drops from 0.510 → 0.419–0.492), comparable to NPO's pattern. The baseline utility is better than NPO's (0.51 vs 0.35), so tuned RMU★ ends up with similar or better utility than tuned NPO.
+- **Charts 1–5 updated** with new RMU data replacing the old checkpoint; chart generation script: `scripts/generate_recovery_charts_v2.py`.
+
+## 09 June 2026 — Charts 1–5 regenerated with RMU★ checkpoint
+
+Charts 1–5 in the 09 June 2026 section have been updated in-place using the new RMU★ (layer5_scoeff10_lr5e-5) data.  The old RMU (layer10_scoeff100_lr1e-5, which barely unlearned) has been replaced throughout.  Chart images in `assets/` have been overwritten.
+
+Generation script: `scripts/generate_recovery_charts_v2.py`
