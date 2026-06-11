@@ -24,10 +24,11 @@ RETAIN90_LOGS = "saves/eval/tofu_Llama-3.2-1B-Instruct_retain90/TOFU_EVAL.json"
 CUSTOM_SPLITS_DIR = "saves/eval/custom_splits"
 
 
-def _train_output_dir(train_split: str) -> str:
+def _train_output_dir(train_split: str, seed: int = 42) -> str:
+    seed_suffix = f"_seed{seed}" if seed != 42 else ""
     return (
         f"saves/finetune/tofu_Llama-3.2-1B-Instruct_retain90_trl_{train_split}"
-        "_lora_e20_lr2e4"
+        f"_lora_e20_lr2e4{seed_suffix}"
     )
 
 
@@ -71,21 +72,31 @@ def _run_eval(
     },
     secrets=[modal.Secret.from_name("huggingface", required_keys=["HF_TOKEN"])],
 )
-def run_pipeline(train_split: str = "forget01", skip_train: bool = False) -> None:
-    if train_split not in {"forget01", "forget05"}:
-        raise ValueError("train_split must be one of: forget01, forget05")
+def run_pipeline(
+    train_split: str = "forget01",
+    skip_train: bool = False,
+    seed: int = 42,
+) -> None:
+    if train_split not in {"forget01", "forget05", "forget10"}:
+        raise ValueError("train_split must be one of: forget01, forget05, forget10")
 
-    holdout_split = {"forget01": "holdout01", "forget05": "holdout05"}[train_split]
+    holdout_split = {
+        "forget01": "holdout01",
+        "forget05": "holdout05",
+        "forget10": "holdout10",
+    }[train_split]
     free_recovery_name = {
         "forget01": "forget10_minus_forget01",
         "forget05": "forget10_minus_forget05",
+        "forget10": None,
     }[train_split]
     free_recovery_file = (
         f"{CUSTOM_SPLITS_DIR}/{free_recovery_name}_perturbed.jsonl"
+        if free_recovery_name else None
     )
     retain90_pert_file = f"{CUSTOM_SPLITS_DIR}/retain90_perturbed.jsonl"
 
-    model_output = _train_output_dir(train_split)
+    model_output = _train_output_dir(train_split, seed)
 
     env = runtime_env().copy()
 
@@ -117,7 +128,7 @@ def run_pipeline(train_split: str = "forget01", skip_train: bool = False) -> Non
                 "MAX_SEQ_LENGTH": "1024",
                 "LORA_R": "16",
                 "LORA_ALPHA": "32",
-                "SEED": "42",
+                "SEED": str(seed),
             }
         )
 
@@ -128,40 +139,43 @@ def run_pipeline(train_split: str = "forget01", skip_train: bool = False) -> Non
             env=train_env,
         )
 
+    eval_root = f"saves/eval/{model_output.split('saves/finetune/')[1]}"
+
     # 1) Taught split eval.
     _run_eval(
         model_path=model_output,
-        output_dir=f"saves/eval/{model_output.split('saves/finetune/')[1]}/evals_{train_split}_taught",
+        output_dir=f"{eval_root}/evals_{train_split}_taught",
         task_name=f"tofu_retain90_trl_{train_split}_taught",
         forget_split=train_split,
         holdout_split=holdout_split,
         env=env,
     )
 
-    # 2) Free-recovery target eval (forget10 minus taught split).
-    free_recovery_overrides = [
-        "eval.tofu.metrics.forget_Q_A_Prob.datasets.TOFU_QA_forget.args.hf_args.path=json",
-        f"+eval.tofu.metrics.forget_Q_A_Prob.datasets.TOFU_QA_forget.args.hf_args.data_files={free_recovery_file}",
-        "eval.tofu.metrics.forget_Q_A_Prob.datasets.TOFU_QA_forget.args.hf_args.split=train",
-        "eval.tofu.metrics.forget_Q_A_ROUGE.datasets.TOFU_QA_forget.args.hf_args.path=json",
-        f"+eval.tofu.metrics.forget_Q_A_ROUGE.datasets.TOFU_QA_forget.args.hf_args.data_files={free_recovery_file}",
-        "eval.tofu.metrics.forget_Q_A_ROUGE.datasets.TOFU_QA_forget.args.hf_args.split=train",
-        "eval.tofu.metrics.forget_truth_ratio.pre_compute.forget_Q_A_PERT_Prob.datasets.TOFU_QA_forget_pert.args.hf_args.path=json",
-        f"+eval.tofu.metrics.forget_truth_ratio.pre_compute.forget_Q_A_PERT_Prob.datasets.TOFU_QA_forget_pert.args.hf_args.data_files={free_recovery_file}",
-        "eval.tofu.metrics.forget_truth_ratio.pre_compute.forget_Q_A_PERT_Prob.datasets.TOFU_QA_forget_pert.args.hf_args.split=train",
-        "eval.tofu.metrics.forget_truth_ratio.pre_compute.forget_Q_A_PARA_Prob.datasets.TOFU_QA_forget_para.args.hf_args.path=json",
-        f"+eval.tofu.metrics.forget_truth_ratio.pre_compute.forget_Q_A_PARA_Prob.datasets.TOFU_QA_forget_para.args.hf_args.data_files={free_recovery_file}",
-        "eval.tofu.metrics.forget_truth_ratio.pre_compute.forget_Q_A_PARA_Prob.datasets.TOFU_QA_forget_para.args.hf_args.split=train",
-    ]
-    _run_eval(
-        model_path=model_output,
-        output_dir=f"saves/eval/{model_output.split('saves/finetune/')[1]}/evals_{free_recovery_name}",
-        task_name=f"tofu_retain90_trl_{train_split}_{free_recovery_name}",
-        forget_split="forget10",
-        holdout_split="holdout10",
-        env=env,
-        overrides=free_recovery_overrides,
-    )
+    # 2) Free-recovery target eval (forget10 minus taught split) — skip for forget10.
+    if free_recovery_file is not None:
+        free_recovery_overrides = [
+            "eval.tofu.metrics.forget_Q_A_Prob.datasets.TOFU_QA_forget.args.hf_args.path=json",
+            f"+eval.tofu.metrics.forget_Q_A_Prob.datasets.TOFU_QA_forget.args.hf_args.data_files={free_recovery_file}",
+            "eval.tofu.metrics.forget_Q_A_Prob.datasets.TOFU_QA_forget.args.hf_args.split=train",
+            "eval.tofu.metrics.forget_Q_A_ROUGE.datasets.TOFU_QA_forget.args.hf_args.path=json",
+            f"+eval.tofu.metrics.forget_Q_A_ROUGE.datasets.TOFU_QA_forget.args.hf_args.data_files={free_recovery_file}",
+            "eval.tofu.metrics.forget_Q_A_ROUGE.datasets.TOFU_QA_forget.args.hf_args.split=train",
+            "eval.tofu.metrics.forget_truth_ratio.pre_compute.forget_Q_A_PERT_Prob.datasets.TOFU_QA_forget_pert.args.hf_args.path=json",
+            f"+eval.tofu.metrics.forget_truth_ratio.pre_compute.forget_Q_A_PERT_Prob.datasets.TOFU_QA_forget_pert.args.hf_args.data_files={free_recovery_file}",
+            "eval.tofu.metrics.forget_truth_ratio.pre_compute.forget_Q_A_PERT_Prob.datasets.TOFU_QA_forget_pert.args.hf_args.split=train",
+            "eval.tofu.metrics.forget_truth_ratio.pre_compute.forget_Q_A_PARA_Prob.datasets.TOFU_QA_forget_para.args.hf_args.path=json",
+            f"+eval.tofu.metrics.forget_truth_ratio.pre_compute.forget_Q_A_PARA_Prob.datasets.TOFU_QA_forget_para.args.hf_args.data_files={free_recovery_file}",
+            "eval.tofu.metrics.forget_truth_ratio.pre_compute.forget_Q_A_PARA_Prob.datasets.TOFU_QA_forget_para.args.hf_args.split=train",
+        ]
+        _run_eval(
+            model_path=model_output,
+            output_dir=f"{eval_root}/evals_{free_recovery_name}",
+            task_name=f"tofu_retain90_trl_{train_split}_{free_recovery_name}",
+            forget_split="forget10",
+            holdout_split="holdout10",
+            env=env,
+            overrides=free_recovery_overrides,
+        )
 
     # 3) Retain90-only utility eval.
     retain90_utility_overrides = [
@@ -180,7 +194,7 @@ def run_pipeline(train_split: str = "forget01", skip_train: bool = False) -> Non
     ]
     _run_eval(
         model_path=model_output,
-        output_dir=f"saves/eval/{model_output.split('saves/finetune/')[1]}/evals_retain90_utility",
+        output_dir=f"{eval_root}/evals_retain90_utility",
         task_name=f"tofu_retain90_trl_{train_split}_retain90_utility",
         forget_split=train_split,
         holdout_split=holdout_split,
@@ -194,5 +208,9 @@ def run_pipeline(train_split: str = "forget01", skip_train: bool = False) -> Non
 
 
 @app.local_entrypoint()
-def main(train_split: str = "forget01", skip_train: bool = False) -> None:
-    run_pipeline.spawn(train_split=train_split, skip_train=skip_train)
+def main(
+    train_split: str = "forget01",
+    skip_train: bool = False,
+    seed: int = 42,
+) -> None:
+    run_pipeline.spawn(train_split=train_split, skip_train=skip_train, seed=seed)

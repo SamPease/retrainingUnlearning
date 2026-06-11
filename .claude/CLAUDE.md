@@ -53,6 +53,13 @@ These notes describe how this repository is wired to Modal so future sessions ca
 - TRL retain90->forget01/forget05 train+eval Modal entrypoint: scripts/modal_tofu_finetune_trl_retain90_forget01_forget05_recovery_llama32_1b.py
 - TRL hfbase (NPO/RMU) forget01/forget05/forget10 train+eval Modal entrypoint: scripts/modal_tofu_finetune_trl_hfbase_forgetx_recovery_llama32_1b.py
 - HFBase recovery comparison report generator: scripts/compare_hfbase_recovery_results.py
+- New unlearning method checkpoint scan (AltPO/GradDiff/IdkDPO/IdkNLL/SimNPO/UNDIAL) Modal entrypoint: scripts/modal_tofu_eval_hf_new_methods_scan_llama32_1b.py
+- New unlearning method scan launcher: scripts/launch_new_methods_scan.sh
+- New unlearning method scan result downloader: scripts/download_new_methods_scan_results.py
+- New unlearning method recovery run launcher (6 methods × 3 splits, supports seed arg): scripts/launch_new_methods_recovery_runs.sh
+- New unlearning method recovery result downloader: scripts/download_new_methods_recovery_results.py
+- Seed replication recovery run launcher (retain90/NPO/RMU★ × 3 splits, supports seed arg): scripts/launch_seed123_recovery_runs.sh
+- Seed replication recovery result downloader: scripts/download_seed123_recovery_results.py
 
 Use the shared setup module for new Modal jobs instead of duplicating image/volume definitions.
 
@@ -232,6 +239,22 @@ Notes for this trial:
 - Runs baseline eval against the source HF checkpoint when `--run-baseline-eval` is set.
 - Runs free-recovery eval only for forget01/forget05; forget10 runs taught + utility suites.
 
+### Scan new unlearning method checkpoints (AltPO, GradDiff, IdkDPO, IdkNLL, SimNPO, UNDIAL)
+
+bash scripts/launch_new_methods_scan.sh
+
+Notes: launches 6 parallel Modal jobs (one per method, 6 sequential evals each). Download results after completion:
+
+conda run -n unlearning python scripts/download_new_methods_scan_results.py
+
+### Launch recovery runs for all 6 new unlearning methods (detached)
+
+bash scripts/launch_new_methods_recovery_runs.sh [SEED]
+
+Notes: launches 18 Modal jobs (6 methods × 3 splits). With 10-GPU plan limit, some jobs will queue. Download results after all complete:
+
+conda run -n unlearning python scripts/download_new_methods_recovery_results.py [SEED]
+
 ### Generate hfbase baseline-vs-tuned-vs-retain comparison markdown
 
 conda run -n unlearning python scripts/compare_hfbase_recovery_results.py
@@ -287,6 +310,8 @@ conda run -n unlearning python scripts/generate_tofu_epoch_report.py --output ex
 - If 2-GPU DeepSpeed still stalls at `0/590`, keep repro hyperparameters and enable NCCL-safe transport flags (`NCCL_P2P_DISABLE=1`, `NCCL_IB_DISABLE=1`, `NCCL_SHM_DISABLE=1`) for the trial run.
 - For the dual 1-GPU repro-style run, missing retain reference logs will fail fast before training; generate/copy `tofu_<model>_retain99` and `tofu_<model>_retain95` TOFU_EVAL logs first.
 - For detached local-entrypoint fan-out jobs, Modal may keep only the last triggered function alive after client disconnect; always verify expected output folders/files on `open-unlearning-results` (or run non-detached when complete fan-out reliability is required).
+- **Modal GPU concurrency limit**: the current plan allows at most 10 GPUs running in parallel. Jobs beyond 10 are queued and will start as earlier jobs finish — they do not fail, but total wall-clock time increases. When launching more than 10 single-GPU jobs at once (e.g. 18-job fan-outs), expect some jobs to start delayed rather than simultaneously. Check `modal app list` to monitor which apps are still running.
+- On macOS the default shell is bash 3.x which does not support `declare -A` associative arrays; use parallel indexed arrays (`TAGS=(...) MODEL_IDS=(...)` iterated with `for i in "${!TAGS[@]}"`) in launch scripts instead.
 - `modal app list --json` returns title-cased keys (`App ID`, `State`, `Description`, ...) rather than snake_case; parse those exact keys in status scripts.
 - For Hydra eval overrides that introduce new `hf_args` keys (for example `data_files` for JSON datasets), prefix those keys with `+` (for example `+...hf_args.data_files=...`) to avoid struct-key errors.
 - For free-recovery custom split overrides, edit nested datasets under `eval.tofu.metrics.forget_truth_ratio.pre_compute.{forget_Q_A_PARA_Prob,forget_Q_A_PERT_Prob}` (not top-level metric keys), otherwise overrides fail with missing-key errors.

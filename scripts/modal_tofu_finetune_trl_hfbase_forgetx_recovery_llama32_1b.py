@@ -24,10 +24,11 @@ RETAIN90_LOGS = "saves/eval/tofu_Llama-3.2-1B-Instruct_retain90/TOFU_EVAL.json"
 CUSTOM_SPLITS_DIR = "saves/eval/custom_splits"
 
 
-def _train_output_dir(model_tag: str, train_split: str) -> str:
+def _train_output_dir(model_tag: str, train_split: str, seed: int = 42) -> str:
+    seed_suffix = f"_seed{seed}" if seed != 42 else ""
     return (
         f"saves/finetune/tofu_Llama-3.2-1B-Instruct_{model_tag}_trl_{train_split}"
-        "_lora_e20_lr2e4"
+        f"_lora_e20_lr2e4{seed_suffix}"
     )
 
 
@@ -169,6 +170,7 @@ def run_experiment(
     train_split: str,
     run_baseline_eval: bool = True,
     skip_train: bool = False,
+    seed: int = 42,
 ) -> None:
     if train_split not in {"forget01", "forget05", "forget10"}:
         raise ValueError("train_split must be one of: forget01, forget05, forget10")
@@ -197,7 +199,7 @@ def run_experiment(
             env=env,
         )
 
-    tuned_model_path = _train_output_dir(model_tag, train_split)
+    tuned_model_path = _train_output_dir(model_tag, train_split, seed)
 
     if not skip_train:
         train_env = env.copy()
@@ -215,7 +217,7 @@ def run_experiment(
                 "MAX_SEQ_LENGTH": "1024",
                 "LORA_R": "16",
                 "LORA_ALPHA": "32",
-                "SEED": "42",
+                "SEED": str(seed),
             }
         )
 
@@ -246,6 +248,7 @@ def main(
     train_split: str = "forget01",
     run_baseline_eval: bool = True,
     skip_train: bool = False,
+    seed: int = 42,
 ) -> None:
     run_experiment.spawn(
         model_name_or_path=model_name_or_path,
@@ -253,4 +256,5 @@ def main(
         train_split=train_split,
         run_baseline_eval=run_baseline_eval,
         skip_train=skip_train,
+        seed=seed,
     )

@@ -1455,3 +1455,279 @@ Transfer rate = (free-rec QAP gain) / (taught QAP gain), both relative to baseli
 Charts 1–5 in the 09 June 2026 section have been updated in-place using the new RMU★ (layer5_scoeff10_lr5e-5) data.  The old RMU (layer10_scoeff100_lr1e-5, which barely unlearned) has been replaced throughout.  Chart images in `assets/` have been overwritten.
 
 Generation script: `scripts/generate_recovery_charts_v2.py`
+
+## 10 June 2026 — Seed robustness check: seed=123 replication across all 9 recovery conditions
+
+**Goal:** verify that the free-recovery transfer-rate trends are not artefacts of the initial random seed (seed=42).  
+**Setup:** re-trained the same three base checkpoints (retain90, NPO, RMU★) on forget01/forget05/forget10 with seed=123, using identical hyperparameters.  
+Baseline evals (deterministic, no training) were not re-run — same seed=42 baseline values are used for transfer-rate denominators.
+
+### Seed comparison — NPO (npo_forget10 base checkpoint)
+
+| split | metric | seed=42 | seed=123 | Δ |
+|---|---|---:|---:|---:|
+| forget01 | taught QAP | 0.9294 | 0.9229 | −0.007 |
+| forget01 | free-rec QAP | 0.4576 | 0.4555 | −0.002 |
+| forget01 | transfer rate | 35.8% | 35.8% | +0.0 pp |
+| forget01 | retain90\_util | 0.5280 | 0.5272 | −0.001 |
+| forget05 | taught QAP | 0.9059 | 0.8980 | −0.008 |
+| forget05 | free-rec QAP | 0.3159 | 0.3160 | +0.000 |
+| forget05 | transfer rate | 15.3% | 15.5% | +0.2 pp |
+| forget05 | retain90\_util | 0.4547 | 0.4489 | −0.006 |
+| forget10 | taught QAP | 0.8644 | 0.8498 | −0.015 |
+| forget10 | retain90\_util | 0.4429 | 0.4343 | −0.009 |
+
+### Seed comparison — RMU★ (rmu_l5_s10_lr5e5 base checkpoint)
+
+| split | metric | seed=42 | seed=123 | Δ |
+|---|---|---:|---:|---:|
+| forget01 | taught QAP | 0.8968 | 0.8927 | −0.004 |
+| forget01 | free-rec QAP | 0.2600 | 0.2531 | −0.007 |
+| forget01 | transfer rate | 28.9% | 28.2% | −0.6 pp |
+| forget01 | retain90\_util | 0.4920 | 0.4827 | −0.009 |
+| forget05 | taught QAP | 0.8895 | 0.8865 | −0.003 |
+| forget05 | free-rec QAP | 0.3662 | 0.3751 | +0.009 |
+| forget05 | transfer rate | 41.0% | 42.1% | +1.1 pp |
+| forget05 | retain90\_util | 0.4386 | 0.4391 | +0.000 |
+| forget10 | taught QAP | 0.8400 | 0.8234 | −0.017 |
+| forget10 | retain90\_util | 0.4185 | 0.4112 | −0.007 |
+
+### Seed comparison — retain90 base checkpoint (seed=42 covered f01/f05 only; f10 is seed=123 new)
+
+| split | metric | seed=42 | seed=123 | Δ |
+|---|---|---:|---:|---:|
+| forget01 | taught QAP | 0.7543 | 0.7606 | +0.006 |
+| forget01 | free-rec QAP | 0.0924 | 0.0955 | +0.003 |
+| forget01 | retain90\_util | 0.4971 | 0.5006 | +0.004 |
+| forget05 | taught QAP | 0.8573 | 0.8478 | −0.010 |
+| forget05 | free-rec QAP | 0.0367 | 0.0396 | +0.003 |
+| forget05 | retain90\_util | 0.3234 | 0.3161 | −0.007 |
+| forget10 | taught QAP | — | 0.7969 | new |
+| forget10 | retain90\_util | — | 0.2887 | new |
+
+### Transfer-rate trend replication
+
+| method | forget01 (s42) | forget01 (s123) | forget05 (s42) | forget05 (s123) | trend holds? |
+|---|---:|---:|---:|---:|:---:|
+| NPO | 35.8% | 35.8% | 15.3% | 15.5% | ✓ ↓ collapses |
+| RMU★ | 28.9% | 28.2% | 41.0% | 42.1% | ✓ ↑ scales up |
+
+### Readout
+
+- **All metrics are within ±0.02 across seeds.** The largest single-metric deviation is forget10 taught QAP for RMU★ (−0.017) — still well within noise.
+- **Transfer-rate direction is completely stable.** NPO's decreasing transfer rate (36%→15%) and RMU★'s increasing transfer rate (29%→41%) both replicate exactly with seed=123, differing by ≤1 pp.
+- **Free-recovery QAP is especially consistent** — the values closest to zero (retain90 model, ≈0.04–0.10) and the values in the mid range (NPO ≈0.32–0.46, RMU★ ≈0.25–0.38) are essentially identical across seeds.
+- **retain90 forget10 baseline (new):** teaching the full forget10 set from the retain90 checkpoint gives QAP=0.797 and retain90\_util=0.289 — substantial utility degradation (vs 0.497–0.317 for f01/f05), suggesting that reteaching the full 10% set is harmful to the retain portion.
+- **Conclusion: the diverging transfer-rate pattern between NPO and RMU★ is robust to seed variation and reflects a genuine structural difference in how the two unlearning mechanisms organise forgetting.**
+
+## 10 June 2026 — Seed robustness check: seed=456 replication + 3-seed summary
+
+**Goal:** second independent replication (seed=456) to confirm seed=123 findings and compute 3-seed statistics across seeds 42, 123, 456.
+
+### 3-seed comparison — forget01
+
+| model | metric | seed=42 | seed=123 | seed=456 | std |
+|---|---|---:|---:|---:|---:|
+| NPO | taught QAP | 0.9294 | 0.9229 | 0.9273 | 0.003 |
+| NPO | free-rec QAP | 0.4576 | 0.4555 | 0.4481 | 0.005 |
+| NPO | transfer rate | 35.8% | 35.8% | 34.6% | 0.7 pp |
+| NPO | retain90\_util | 0.5280 | 0.5272 | 0.5253 | 0.001 |
+| RMU★ | taught QAP | 0.8968 | 0.8927 | 0.8947 | 0.002 |
+| RMU★ | free-rec QAP | 0.2600 | 0.2531 | 0.2551 | 0.004 |
+| RMU★ | transfer rate | 28.9% | 28.2% | 28.4% | 0.3 pp |
+| RMU★ | retain90\_util | 0.4920 | 0.4827 | 0.4910 | 0.005 |
+| retain90 | taught QAP | 0.7543 | 0.7606 | 0.7504 | 0.005 |
+| retain90 | free-rec QAP | 0.0924 | 0.0955 | 0.0944 | 0.002 |
+| retain90 | retain90\_util | 0.4971 | 0.5006 | 0.5045 | 0.004 |
+
+### 3-seed comparison — forget05
+
+| model | metric | seed=42 | seed=123 | seed=456 | std |
+|---|---|---:|---:|---:|---:|
+| NPO | taught QAP | 0.9059 | 0.8980 | 0.9140 | 0.008 |
+| NPO | free-rec QAP | 0.3159 | 0.3160 | 0.3224 | 0.004 |
+| NPO | transfer rate | 15.3% | 15.5% | 16.1% | 0.4 pp |
+| NPO | retain90\_util | 0.4547 | 0.4489 | 0.4584 | 0.005 |
+| RMU★ | taught QAP | 0.8895 | 0.8865 | 0.8968 | 0.005 |
+| RMU★ | free-rec QAP | 0.3662 | 0.3751 | 0.3962 | 0.015 |
+| RMU★ | transfer rate | 41.0% | 42.1% | 44.0% | 1.5 pp |
+| RMU★ | retain90\_util | 0.4386 | 0.4391 | 0.4413 | 0.001 |
+| retain90 | taught QAP | 0.8573 | 0.8478 | 0.8045 | 0.028 |
+| retain90 | free-rec QAP | 0.0367 | 0.0396 | 0.0348 | 0.002 |
+| retain90 | retain90\_util | 0.3234 | 0.3161 | 0.3096 | 0.007 |
+
+### 3-seed comparison — forget10 (retain90 has no seed=42 baseline)
+
+| model | metric | seed=42 | seed=123 | seed=456 | std |
+|---|---|---:|---:|---:|---:|
+| NPO | taught QAP | 0.8644 | 0.8498 | 0.8688 | 0.010 |
+| NPO | retain90\_util | 0.4429 | 0.4343 | 0.4375 | 0.004 |
+| RMU★ | taught QAP | 0.8400 | 0.8234 | 0.8638 | 0.020 |
+| RMU★ | retain90\_util | 0.4185 | 0.4112 | 0.4224 | 0.006 |
+| retain90 | taught QAP | — | 0.7969 | 0.8296 | — |
+| retain90 | retain90\_util | — | 0.2887 | 0.2890 | — |
+
+### Transfer-rate direction across all 3 seeds
+
+| method | f01 mean ± std | f05 mean ± std | direction |
+|---|---:|---:|:---:|
+| NPO | 35.4% ± 0.7 pp | 15.6% ± 0.4 pp | ↓ collapses (−19.8 pp) |
+| RMU★ | 28.5% ± 0.3 pp | 42.4% ± 1.5 pp | ↑ scales up (+13.9 pp) |
+
+### Readout
+
+- **All key metrics are highly stable across seeds.** QAP std ≤ 0.005 for most conditions; utility std ≤ 0.007 throughout. The largest outlier is RMU★ forget05 free-rec QAP (std=0.015) — still small in absolute terms.
+- **The transfer-rate divergence is rock-solid.** NPO's rate at forget01 (35.4 ± 0.7 pp) consistently more than halves by forget05 (15.6 ± 0.4 pp). RMU★ shows the exact opposite: 28.5 ± 0.3 pp at forget01 growing to 42.4 ± 1.5 pp at forget05. The gap between the two methods' forget05 transfer rates is ~27 pp with essentially zero overlap across seeds.
+- **retain90 forget05 taught QAP shows the most variability** (std=0.028, range 0.805–0.857). This is the model without any unlearning step — its forgetting of the retain-90 content may be more sensitive to initialization, but free-rec QAP and utility are still tight (std ≤ 0.007).
+- **forget10 taught QAP for RMU★ has the widest range** (0.823–0.864, std=0.020), but this does not affect the primary transfer-rate analysis (which covers only f01 and f05).
+- **Conclusion: two independent replications confirm the finding from seed=42. The opposing transfer-rate trajectories of NPO and RMU★ are a robust property of the respective unlearning mechanisms, not a seed artefact.**
+
+## 10 June 2026 — New method checkpoint scan: AltPO, GradDiff, IdkDPO, IdkNLL, SimNPO, UNDIAL
+
+**Goal:** identify best-forgetting/utility checkpoint for each of 6 new unlearning methods to use as baselines for recovery experiments.
+
+**Scan setup:** 6 candidates per method (36 total), all epoch=10, vary lr and primary strength param (alpha/beta). Evaluated with full TOFU eval suite; ranked by harmonic metric `2·(1−QAP)·(mu/0.591) / ((1−QAP)+(mu/0.591))`. Retain reference: retain90.
+
+Scripts: `scripts/modal_tofu_eval_hf_new_methods_scan_llama32_1b.py`, `scripts/launch_new_methods_scan.sh`, `scripts/download_new_methods_scan_results.py`
+
+### Scan results — all 36 candidates
+
+| method | label | QAP | mu | forget_quality | harmonic |
+|---|---|---:|---:|---:|---:|
+| AltPO | altpo_l5e5_b01_a1 ★ | 0.070 | 0.572 | 0.000 | 0.949 |
+| AltPO | altpo_l2e5_b01_a1 | 0.271 | 0.582 | 0.181 | 0.838 |
+| AltPO | altpo_l1e5_b005_a2 | 0.300 | 0.423 | 0.010 | 0.708 |
+| AltPO | altpo_l5e5_b05_a5 | 0.478 | 0.554 | 0.000 | 0.671 |
+| AltPO | altpo_l1e5_b01_a1 | 0.507 | 0.537 | 0.000 | 0.639 |
+| AltPO | altpo_l2e5_b05_a1 | 0.707 | 0.589 | 0.000 | 0.452 |
+| GradDiff | graddiff_l4e5_a5 ★ | 0.000 | 0.565 | 0.000 | 0.977 |
+| GradDiff | graddiff_l3e5_a5 | 0.000 | 0.562 | 0.000 | 0.975 |
+| GradDiff | graddiff_l5e5_a10 | 0.000 | 0.561 | 0.000 | 0.974 |
+| GradDiff | graddiff_l5e5_a2 | 0.000 | 0.519 | 0.000 | 0.935 |
+| GradDiff | graddiff_l1e5_a1 | 0.055 | 0.441 | 0.000 | 0.833 |
+| GradDiff | graddiff_l2e5_a1 | 0.000 | 0.248 | 0.000 | 0.592 |
+| IdkDPO | idkdpo_l5e5_b01_a1 ★ | 0.135 | 0.560 | 0.045 | 0.904 |
+| IdkDPO | idkdpo_l1e5_b005_a2 | 0.081 | 0.522 | 0.001 | 0.901 |
+| IdkDPO | idkdpo_l2e5_b01_a1 | 0.231 | 0.574 | 0.000 | 0.858 |
+| IdkDPO | idkdpo_l1e5_b01_a1 | 0.468 | 0.570 | 0.000 | 0.686 |
+| IdkDPO | idkdpo_l5e5_b05_a5 | 0.666 | 0.555 | 0.000 | 0.492 |
+| IdkDPO | idkdpo_l2e5_b05_a1 | 0.830 | 0.585 | 0.000 | 0.290 |
+| IdkNLL | idknll_l5e5_a2 ★ | 0.539 | 0.535 | 0.000 | 0.611 |
+| IdkNLL | idknll_l5e5_a10 | 0.603 | 0.552 | 0.000 | 0.557 |
+| IdkNLL | idknll_l4e5_a5 | 0.643 | 0.556 | 0.000 | 0.518 |
+| IdkNLL | idknll_l3e5_a5 | 0.717 | 0.567 | 0.000 | 0.438 |
+| IdkNLL | idknll_l2e5_a1 | 0.745 | 0.495 | 0.000 | 0.391 |
+| IdkNLL | idknll_l1e5_a1 | 0.791 | 0.461 | 0.000 | 0.330 |
+| SimNPO | simnpo_l5e5_b45_d1_g025 ★ | 0.075 | 0.584 | 0.523 | 0.955 |
+| SimNPO | simnpo_l2e5_b45_d1_g025 | 0.108 | 0.594 | 0.000 | 0.945 |
+| SimNPO | simnpo_l5e5_b35_d0_g025 | 0.303 | 0.573 | 0.000 | 0.811 |
+| SimNPO | simnpo_l2e5_b35_d0_g025 | 0.435 | 0.597 | 0.000 | 0.725 |
+| SimNPO | simnpo_l1e5_b45_d1_g0125 | 0.599 | 0.587 | 0.000 | 0.572 |
+| SimNPO | simnpo_l1e5_b35_d0_g025 | 0.750 | 0.595 | 0.000 | 0.401 |
+| UNDIAL | undial_l1e4_b30_a2 ★ | 0.081 | 0.502 | 0.000 | 0.883 |
+| UNDIAL | undial_l1e4_b10_a1 | 0.142 | 0.513 | 0.000 | 0.863 |
+| UNDIAL | undial_l1e5_b10_a1 | 0.668 | 0.613 | 0.000 | 0.503 |
+| UNDIAL | undial_l3e4_b30_a5 | 0.068 | 0.153 | 0.000 | 0.404 |
+| UNDIAL | undial_l3e4_b3_a1 | 0.481 | 0.180 | 0.000 | 0.383 |
+| UNDIAL | undial_l3e4_b10_a1 | 0.106 | 0.133 | 0.000 | 0.360 |
+
+### Selected best checkpoints (★)
+
+| method | tag | HF model ID | QAP | mu | harmonic | notes |
+|---|---|---|---:|---:|---:|---|
+| AltPO★ | altpo_l5e5_b01_a1 | `...AltPO_lr5e-05_beta0.1_alpha1_epoch10` | 0.070 | 0.572 | 0.949 | |
+| GradDiff★ | graddiff_l4e5_a5 | `...GradDiff_lr4e-05_alpha5_epoch10` | 0.000 | 0.565 | 0.977 | best of all 8 methods |
+| IdkDPO★ | idkdpo_l5e5_b01_a1 | `...IdkDPO_lr5e-05_beta0.1_alpha1_epoch10` | 0.135 | 0.560 | 0.904 | |
+| IdkNLL★ | idknll_l5e5_a2 | `...IdkNLL_lr5e-05_alpha2_epoch10` | 0.539 | 0.535 | 0.611 | ⚠ weak forgetting; teaches IDK responses without erasing latent knowledge |
+| SimNPO★ | simnpo_l5e5_b45_d1_g025 | `...SimNPO_lr5e-05_b4.5_a1_d1_g0.25_ep10` | 0.075 | 0.584 | 0.955 | |
+| UNDIAL★ | undial_l1e4_b30_a2 | `...UNDIAL_lr0.0001_beta30_alpha2_epoch10` | 0.081 | 0.502 | 0.883 | utility drops sharply at lr=3e-4 |
+
+**Readout:**
+- **GradDiff and SimNPO match or exceed RMU★** (harmonic 0.977 / 0.955 vs 0.964). Both reach near-zero QAP with decent utility.
+- **AltPO is comparable to NPO★** (harmonic 0.949 vs 0.947). All use lr=5e-5 as the sweet spot.
+- **UNDIAL shows a utility cliff**: lr=3e-4 candidates all collapse utility below 0.18 despite low QAP; lr=1e-4 is the stable region.
+- **IdkNLL is fundamentally weak**: its best QAP is 0.539 — the model still recalls >50% of forget content. The IDK-NLL approach redirects surface outputs (teaching "I don't know") without disrupting the underlying representations. Including it for comparison but flagging as a weak baseline.
+
+## 10 June 2026 — New method recovery experiments (seed=42): AltPO★, GradDiff★, IdkDPO★, IdkNLL★, SimNPO★, UNDIAL★
+
+**Goal:** run the standard TRL SFTTrainer + LoRA recovery loop (forget01/05/10 × taught + free-recovery + retain90 utility) on the 6 new unlearning method checkpoints identified in the scan, and compare transfer-rate patterns against the original NPO★ and RMU★ baselines.
+
+**Training:** same hyperparams as all prior recovery runs — epochs=20, lr=2e-4, warmup=0.03, wd=0.0, batch=4, grad_accum=4, lora_r=16, lora_alpha=32, seed=42.
+
+Scripts: `scripts/launch_new_methods_recovery_runs.sh`, `scripts/modal_tofu_finetune_trl_hfbase_forgetx_recovery_llama32_1b.py`, `scripts/download_new_methods_recovery_results.py`
+
+Note: 18 jobs launched simultaneously; with the 10-GPU plan limit some jobs were queued and started with a delay rather than all at once. All 18 completed successfully (96/96 result files present).
+
+### Per-method recovery results
+
+Transfer rate = (free-rec QAP gain) / (taught QAP gain), both relative to baseline.  Positive = some knowledge of the untaught subset recovered alongside the taught subset.
+
+#### AltPO★ (`altpo_l5e5_b01_a1`, baseline QAP≈0.07)
+
+| split | taught QAP base→tuned | free-rec QAP base→tuned | transfer rate | retain90_utility |
+|---|---:|---:|---:|---:|
+| forget01 | 0.057 → 0.730 | 0.072 → 0.156 | +12.5% | 0.465 |
+| forget05 | 0.065 → 0.922 | 0.076 → 0.067 | −1.1% | 0.305 |
+| forget10 | 0.070 → 0.897 | — | — | 0.303 |
+
+#### GradDiff★ (`graddiff_l4e5_a5`, baseline QAP≈0.00)
+
+| split | taught QAP base→tuned | free-rec QAP base→tuned | transfer rate | retain90_utility |
+|---|---:|---:|---:|---:|
+| forget01 | 0.000 → 0.753 | 0.000 → 0.125 | +16.7% | 0.516 |
+| forget05 | 0.000 → 0.901 | 0.000 → 0.107 | +11.8% | 0.425 |
+| forget10 | 0.000 → 0.860 | — | — | 0.411 |
+
+#### IdkDPO★ (`idkdpo_l5e5_b01_a1`, baseline QAP≈0.14)
+
+| split | taught QAP base→tuned | free-rec QAP base→tuned | transfer rate | retain90_utility |
+|---|---:|---:|---:|---:|
+| forget01 | 0.138 → 0.889 | 0.135 → 0.133 | −0.2% | 0.522 |
+| forget05 | 0.128 → 0.929 | 0.142 → 0.088 | −6.7% | 0.416 |
+| forget10 | 0.135 → 0.904 | — | — | 0.397 |
+
+#### IdkNLL★ (`idknll_l5e5_a2`, baseline QAP≈0.54)
+
+| split | taught QAP base→tuned | free-rec QAP base→tuned | transfer rate | retain90_utility |
+|---|---:|---:|---:|---:|
+| forget01 | 0.551 → 0.915 | 0.537 → 0.419 | −32.5% | 0.541 |
+| forget05 | 0.528 → 0.890 | 0.550 → 0.277 | −75.3% | 0.469 |
+| forget10 | 0.539 → 0.857 | — | — | 0.448 |
+
+#### SimNPO★ (`simnpo_l5e5_b45_d1_g025`, baseline QAP≈0.07)
+
+| split | taught QAP base→tuned | free-rec QAP base→tuned | transfer rate | retain90_utility |
+|---|---:|---:|---:|---:|
+| forget01 | 0.073 → 0.799 | 0.075 → 0.153 | +10.7% | 0.524 |
+| forget05 | 0.068 → 0.902 | 0.081 → 0.059 | −2.7% | 0.404 |
+| forget10 | 0.075 → 0.859 | — | — | 0.372 |
+
+#### UNDIAL★ (`undial_l1e4_b30_a2`, baseline QAP≈0.08)
+
+| split | taught QAP base→tuned | free-rec QAP base→tuned | transfer rate | retain90_utility |
+|---|---:|---:|---:|---:|
+| forget01 | 0.065 → 0.689 | 0.082 → 0.187 | +16.9% | 0.506 |
+| forget05 | 0.078 → 0.815 | 0.083 → 0.062 | −2.8% | 0.395 |
+| forget10 | 0.080 → 0.739 | — | — | 0.349 |
+
+### Cross-method transfer rate summary
+
+| method | f01 TR | f05 TR | f01→f05 direction |
+|---|---:|---:|:---:|
+| NPO★ (reference) | +35.8% | +15.3% | ↓ collapses |
+| RMU★ (reference) | +28.9% | +41.0% | ↑ scales up |
+| GradDiff★ | +16.7% | +11.8% | ↓ mild collapse |
+| UNDIAL★ | +16.9% | −2.8% | ↓ collapses to zero |
+| AltPO★ | +12.5% | −1.1% | ↓ collapses to zero |
+| SimNPO★ | +10.7% | −2.7% | ↓ collapses to zero |
+| IdkDPO★ | −0.2% | −6.7% | ≈ zero throughout |
+| IdkNLL★ | −32.5% | −75.3% | ↓↓ strongly anti-transfer |
+
+### Readout
+
+- **No new method replicates the RMU★ scaling pattern.** RMU★ is the only method showing transfer rate that *increases* from forget01 to forget05. All 6 new methods collapse toward zero or below at forget05, placing them closer to the NPO family than the RMU family.
+- **GradDiff★ has the most consistent positive transfer** among the new methods — +16.7% at f01 and still +11.8% at f05, making it the only new method to maintain a positive rate at both teaching scales. This is notable given GradDiff had perfect forgetting (QAP=0.000) at baseline.
+- **IdkNLL★ shows strongly negative transfer (anti-transfer).** Teaching forget01 content causes free-rec QAP to *fall* (0.537→0.419 at f01; 0.550→0.277 at f05). The interpretation: IdkNLL's surface-level "IDK" suppression is disrupted by SFT in an asymmetric way — recovering the taught subset paradoxically increases forgetting of the untaught subset. This is consistent with IdkNLL never truly erasing representations; the SFT may overwrite the IDK pattern in a way that selectively degrades the model's ability to access adjacent content.
+- **IdkDPO★ shows near-zero transfer at both scales** (−0.2% to −6.7%), despite having a non-trivial baseline QAP (0.135). The DPO-based IDK mechanism appears to compartmentalise forgetting more completely, leaving little transferable latent structure.
+- **retain90_utility degrades with larger training sets** across all methods. f01 runs produce r90_util in the 0.465–0.541 range; f05 runs produce 0.305–0.469; f10 runs produce 0.303–0.448. This pattern is consistent with the earlier NPO/RMU★ findings.
+- **UNDIAL★ shows the weakest absolute recall recovery** (taught f01 QAP: 0.065→0.689, vs 0.900+ for most other methods), consistent with its lower baseline unlearning depth (harmonic=0.883) — but positive f01 transfer rate (16.9%) shows the mechanism does leave recoverable structure.
