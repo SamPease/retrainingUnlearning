@@ -153,6 +153,14 @@ def run_pipeline(
 
     # 2) Free-recovery target eval (forget10 minus taught split) — skip for forget10.
     if free_recovery_file is not None:
+        import os
+        cached_eval_json = os.path.join(
+            WORKDIR, eval_root, f"evals_{free_recovery_name}", "TOFU_EVAL.json"
+        )
+        if os.path.exists(cached_eval_json):
+            os.remove(cached_eval_json)
+            print(f"Deleted cached eval to force fresh run: {cached_eval_json}")
+
         free_recovery_overrides = [
             "eval.tofu.metrics.forget_Q_A_Prob.datasets.TOFU_QA_forget.args.hf_args.path=json",
             f"+eval.tofu.metrics.forget_Q_A_Prob.datasets.TOFU_QA_forget.args.hf_args.data_files={free_recovery_file}",
@@ -166,6 +174,14 @@ def run_pipeline(
             "eval.tofu.metrics.forget_truth_ratio.pre_compute.forget_Q_A_PARA_Prob.datasets.TOFU_QA_forget_para.args.hf_args.path=json",
             f"+eval.tofu.metrics.forget_truth_ratio.pre_compute.forget_Q_A_PARA_Prob.datasets.TOFU_QA_forget_para.args.hf_args.data_files={free_recovery_file}",
             "eval.tofu.metrics.forget_truth_ratio.pre_compute.forget_Q_A_PARA_Prob.datasets.TOFU_QA_forget_para.args.hf_args.split=train",
+            # extraction_strength uses TOFU_QA_forget (perturbed) — override to subset
+            "eval.tofu.metrics.extraction_strength.datasets.TOFU_QA_forget.args.hf_args.path=json",
+            f"+eval.tofu.metrics.extraction_strength.datasets.TOFU_QA_forget.args.hf_args.data_files={free_recovery_file}",
+            "eval.tofu.metrics.extraction_strength.datasets.TOFU_QA_forget.args.hf_args.split=train",
+            # privleak (mia_min_k) uses TOFU_QA_forget — override to subset
+            "eval.tofu.metrics.privleak.pre_compute.mia_min_k.datasets.TOFU_QA_forget.args.hf_args.path=json",
+            f"+eval.tofu.metrics.privleak.pre_compute.mia_min_k.datasets.TOFU_QA_forget.args.hf_args.data_files={free_recovery_file}",
+            "eval.tofu.metrics.privleak.pre_compute.mia_min_k.datasets.TOFU_QA_forget.args.hf_args.split=train",
         ]
         _run_eval(
             model_path=model_output,

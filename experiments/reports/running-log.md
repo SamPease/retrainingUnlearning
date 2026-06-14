@@ -1731,3 +1731,86 @@ Transfer rate = (free-rec QAP gain) / (taught QAP gain), both relative to baseli
 - **IdkDPO★ shows near-zero transfer at both scales** (−0.2% to −6.7%), despite having a non-trivial baseline QAP (0.135). The DPO-based IDK mechanism appears to compartmentalise forgetting more completely, leaving little transferable latent structure.
 - **retain90_utility degrades with larger training sets** across all methods. f01 runs produce r90_util in the 0.465–0.541 range; f05 runs produce 0.305–0.469; f10 runs produce 0.303–0.448. This pattern is consistent with the earlier NPO/RMU★ findings.
 - **UNDIAL★ shows the weakest absolute recall recovery** (taught f01 QAP: 0.065→0.689, vs 0.900+ for most other methods), consistent with its lower baseline unlearning depth (harmonic=0.883) — but positive f01 transfer rate (16.9%) shows the mechanism does leave recoverable structure.
+
+---
+
+## Corrected ES and privleak free-recovery re-evals (2026-06-14)
+
+**Bug fixed (round 2)**: the first round of re-evals (same date) hit a second caching issue — the evaluator loads any existing `TOFU_EVAL.json` and skips already-computed metrics, so even with the corrected Hydra overrides the old (buggy) ES/privleak values were returned unchanged. Both recovery scripts now delete `TOFU_EVAL.json` from the free-recovery eval dir before running `_run_eval`. The 30 conditions were re-launched and re-downloaded.
+
+### Corrected ES values (free-recovery, mean across seeds for core methods)
+
+| Method | forget01 ES | forget05 ES |
+|--------|------------:|------------:|
+| Retain90 | 0.057 ± 0.001 | 0.052 ± 0.001 |
+| NPO | 0.132 ± 0.002 | 0.119 ± 0.008 |
+| RMU★ | 0.096 ± 0.002 | 0.322 ± 0.138 |
+| AltPO | 0.086 | 0.062 |
+| GradDiff | 0.090 | 0.082 |
+| IdkDPO | 0.070 | 0.067 |
+| IdkNLL | 0.130 | 0.114 |
+| SimNPO | 0.097 | 0.062 |
+| UNDIAL | 0.047 | 0.048 |
+
+### Corrected privleak values (free-recovery, mean across seeds for core methods)
+
+| Method | forget01 privleak | forget05 privleak |
+|--------|------------------:|------------------:|
+| Retain90 | −0.2 ± 0.3 | +0.9 ± 1.3 |
+| NPO | −93.6 ± 0.0 | −93.2 ± 0.5 |
+| RMU★ | −80.9 ± 0.7 | −97.2 ± 1.0 |
+| AltPO | −33.8 | −44.4 |
+| GradDiff | −6.5 | −38.0 |
+| IdkDPO | −39.6 | −52.8 |
+| IdkNLL | −94.8 | −91.7 |
+| SimNPO | −35.8 | −31.6 |
+| UNDIAL | −74.4 | −54.5 |
+
+### Readout
+
+- **Retain90 ES stays flat**: 0.057 at 1%, 0.052 at 5% — barely above baseline (0.055). Teaching 1–5% of forget10 content does not unlock generative extraction for a model that never encoded it. This is the correct reference floor; the previous (buggy) value of 0.366 at forget05 was entirely due to evaluating on training examples.
+- **NPO ES is modest**: 0.132 at 1%, 0.119 at 5% — slight decrease, plausibly because the forget05 untaught complement (50 examples) is a different and harder set than the forget01 complement (90 examples).
+- **RMU★ at forget05 is bimodal**: seeds 123 and 456 reach 0.417–0.423, seed 42 only reaches 0.127. Mean 0.322, std 0.138. Suggests RMU★'s recovery is near a threshold at 5% teaching.
+- **ES for new methods is universally low at both scales**: 0.047–0.130 at forget01, 0.048–0.114 at forget05. No new method replicates the two-seed RMU★ breakthrough.
+- **Privleak for Retain90 stays near zero**: confirms that the large negative values for NPO/RMU★ reflect latent-structure reorganization, not format learning.
+- **GradDiff has the weakest privleak at both scales** (−6.5 and −38.0) — the untaught forget10-minus-forgetN examples remain relatively non-identifiable under Min-K% MIA.
+- **IdkNLL shows the strongest privleak for new methods** (−94.8 and −91.7), consistent with its close mechanistic relationship to NPO-style suppression.
+- All 4 expanded free-recovery charts (QAP, ROUGE, privleak, ES) regenerated with these corrected values.
+
+---
+
+## 14 June 2026 — RMU★ forget05 ES/privleak final correction (seeds 123/456)
+
+The first ES/privleak re-eval pass (same date, above) still produced wrong RMU★ forget05 ES values for seeds 123 and 456 (0.417/0.423 — matching the pre-fix contaminated values). Root cause: the in-script `os.path.exists()` / `os.remove()` failed to see the cached `TOFU_EVAL.json` on the Modal volume at deletion time (lazy mount visibility), so the cache was never cleared and the old values were returned unchanged for those two seeds. Seed 42 was not affected because it had no prior cache entry.
+
+Fix: manually cleared the cache via `modal volume rm open-unlearning-results /eval/{slug}/evals_forget10_minus_forget05/TOFU_EVAL.json` for both seeds 123 and 456, then re-launched 2 targeted `--skip-train` jobs and downloaded corrected results.
+
+### Corrected RMU★ forget05 ES per seed
+
+| Seed | Pre-fix ES | Post-fix ES |
+|------|----------:|----------:|
+| 42   | 0.1265 | 0.1265 (unchanged) |
+| 123  | 0.4170 | 0.1299 |
+| 456  | 0.4233 | 0.1375 |
+
+Mean: **0.131 ± 0.006** (was 0.322 ± 0.138). All seeds now agree within ±0.01.
+
+### Corrected RMU★ forget05 privleak
+
+| Seed | Pre-fix | Post-fix |
+|------|--------:|--------:|
+| 42   | −97.5 | −97.5 (unchanged) |
+| 123  | −97.0 | −95.6 |
+| 456  | −97.0 | −95.4 |
+
+Mean: **−96.2 ± 0.5** (was −97.2 ± 1.0).
+
+### Impact on prior running-log tables
+
+The ES and privleak tables in the entry immediately above contain the intermediate (still-wrong) values for RMU★ forget05. The corrected values are those in this entry. The stale `tmp/` download directories (`seed123_recovery_eval_summaries/`, `seed456_recovery_eval_summaries/`, `new_methods_recovery_eval_summaries/`) were deleted; `saves/eval/` is the canonical source and reflects these final corrected values.
+
+### Readout
+
+- **RMU★ ES at forget05 is 0.131 ± 0.006** — tight, consistent across all three seeds. The wide cone (std 0.138) and bimodal narrative from the prior entry were entirely a measurement artifact.
+- **No method shows threshold behavior or seed-dependent unlocking.** ES recovery is modest and uniform: NPO 0.119, RMU★ 0.131, all new methods below 0.115.
+- All 8 free-recovery charts regenerated with final corrected values; report (`retraining-unlearning.md`) updated accordingly.
