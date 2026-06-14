@@ -131,7 +131,7 @@ def run_eval(model_path: str, output_dir: str, train_split: str) -> None:
     env = runtime_env().copy()
 
     subprocess.run(
-        ["python", "scripts/build_tofu_custom_eval_splits.py", "--output_dir", CUSTOM_DIR],
+        ["python", "scripts/utils/build_custom_eval_splits.py", "--output_dir", CUSTOM_DIR],
         check=True, cwd=WORKDIR, env=env,
     )
 

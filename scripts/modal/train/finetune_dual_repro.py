@@ -70,7 +70,7 @@ def run_dual_repro_trial_1gpu(
     )
 
     subprocess.run(
-        ["bash", "scripts/tofu_finetune_dual_repro_1gpu_min_eval.sh"],
+        ["bash", "scripts/shell/train/tofu_finetune_dual_repro.sh"],
         check=True,
         cwd=WORKDIR,
         env=env,

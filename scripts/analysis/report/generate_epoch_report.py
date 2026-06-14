@@ -193,7 +193,7 @@ def generate_report(
         "",
         "Regenerate this report:",
         "```bash",
-        "python scripts/generate_tofu_epoch_report.py --output experiments/reports/training-runs.md",
+        "python scripts/analysis/report/generate_epoch_report.py --output experiments/reports/training-runs.md",
         "```",
         "",
     ]

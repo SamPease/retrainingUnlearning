@@ -6,14 +6,14 @@ Architecture: one long-running Modal function per method; candidates within a
 method are evaluated sequentially to avoid the detach-fan-out kill problem.
 
 Usage (one call per method, all can run concurrently):
-  conda run -n unlearning modal run --detach scripts/modal_tofu_eval_hf_new_methods_scan_llama32_1b.py --method GradDiff
-  conda run -n unlearning modal run --detach scripts/modal_tofu_eval_hf_new_methods_scan_llama32_1b.py --method AltPO
-  conda run -n unlearning modal run --detach scripts/modal_tofu_eval_hf_new_methods_scan_llama32_1b.py --method IdkDPO
-  conda run -n unlearning modal run --detach scripts/modal_tofu_eval_hf_new_methods_scan_llama32_1b.py --method IdkNLL
-  conda run -n unlearning modal run --detach scripts/modal_tofu_eval_hf_new_methods_scan_llama32_1b.py --method SimNPO
-  conda run -n unlearning modal run --detach scripts/modal_tofu_eval_hf_new_methods_scan_llama32_1b.py --method UNDIAL
+  conda run -n unlearning modal run --detach scripts/modal/eval/scan_new_methods.py --method GradDiff
+  conda run -n unlearning modal run --detach scripts/modal/eval/scan_new_methods.py --method AltPO
+  conda run -n unlearning modal run --detach scripts/modal/eval/scan_new_methods.py --method IdkDPO
+  conda run -n unlearning modal run --detach scripts/modal/eval/scan_new_methods.py --method IdkNLL
+  conda run -n unlearning modal run --detach scripts/modal/eval/scan_new_methods.py --method SimNPO
+  conda run -n unlearning modal run --detach scripts/modal/eval/scan_new_methods.py --method UNDIAL
 
-Or use scripts/launch_new_methods_scan.sh to fire all 6 at once.
+Or use scripts/shell/launch/launch_new_methods_scan.sh to fire all 6 at once.
 """
 from __future__ import annotations
 

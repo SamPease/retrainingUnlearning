@@ -23,7 +23,7 @@ echo "[tofu-trl] epochs=${epochs} lr=${lr} warmup_ratio=${warmup_ratio} weight_d
 echo "[tofu-trl] batch_size=${batch_size} grad_accum=${grad_accum} max_seq_length=${max_seq_length}"
 echo "[tofu-trl] lora_r=${lora_r} lora_alpha=${lora_alpha}"
 
-CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}" python scripts/train_tofu_forget10_trl_sft.py \
+CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}" python scripts/utils/train_trl_sft.py \
   --model_name_or_path "${model_name_or_path}" \
   --train_split_name "${train_split_name}" \
   --output_dir "${output_dir}" \

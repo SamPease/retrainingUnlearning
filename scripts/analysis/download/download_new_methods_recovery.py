@@ -6,7 +6,7 @@ from the Modal results volume.
 Covers: AltPO, GradDiff, IdkDPO, IdkNLL, SimNPO, UNDIAL × forget01/05/10.
 Downloads both baseline evals and post-training tuned evals.
 
-Usage: python scripts/download_new_methods_recovery_results.py
+Usage: python scripts/analysis/download/download_new_methods_recovery.py
 
 Output dir: tmp/new_methods_recovery_eval_summaries/
 """

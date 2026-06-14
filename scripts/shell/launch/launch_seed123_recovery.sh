@@ -11,8 +11,8 @@ SEED="${1:-123}"
 
 NPO_MODEL="open-unlearning/unlearn_tofu_Llama-3.2-1B-Instruct_forget10_NPO_lr1e-05_beta0.1_alpha1_epoch10"
 RMU_MODEL="open-unlearning/unlearn_tofu_Llama-3.2-1B-Instruct_forget10_RMU_lr5e-05_layer5_scoeff10_epoch10"
-HFBASE_SCRIPT="scripts/modal_tofu_finetune_trl_hfbase_forgetx_recovery_llama32_1b.py"
-RETAIN90_SCRIPT="scripts/modal_tofu_finetune_trl_retain90_forget01_forget05_recovery_llama32_1b.py"
+HFBASE_SCRIPT="scripts/modal/train/recovery_hfbase.py"
+RETAIN90_SCRIPT="scripts/modal/train/recovery_retain90.py"
 
 echo "=== Launching seed=${SEED} recovery runs ==="
 

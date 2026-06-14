@@ -19,7 +19,7 @@ echo "[tofu-finetune] batch_size=${batch_size} grad_accum=${grad_accum} lr=${lr}
 
 if [[ "${check_nested_splits}" == "1" ]]; then
 	echo "[tofu-finetune] verifying nested TOFU forget/holdout splits (1% subset-of 5% subset-of 10%)"
-	python scripts/verify_tofu_nested_splits.py
+	python scripts/utils/verify_nested_splits.py
 fi
 
 ########################################################################################################################

@@ -1,5 +1,12 @@
 # custom .gitignore
 submit.py
+
+# macOS metadata
+.DS_Store
+**/.DS_Store
+
+# Local editor/tool configs
+cspell.json
 !src/data/__init__.py
 logs/
 unity/
@@ -14,9 +21,18 @@ notebooks/
 output*/
 wandb/
 data/
-!*/data/ 
+!*/data/
 evals/
-!*/evals/  
+!*/evals/
+
+# Experiment intermediate data (large, not needed for reproducibility)
+tmp/
+experiments/run_summaries/
+experiments/run_ledger/
+
+# Generated / externally-hosted report files
+experiments/reports/retraining-unlearning.md
+experiments/reports/training-runs.md
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

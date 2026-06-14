@@ -74,7 +74,7 @@ def run_tofu_finetune_sweep(
     )
 
     subprocess.run(
-        ["bash", "scripts/tofu_finetune_sweep.sh"],
+        ["bash", "scripts/shell/train/tofu_finetune_sweep.sh"],
         check=True,
         cwd=WORKDIR,
         env=env,

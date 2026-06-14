@@ -56,7 +56,7 @@ def run_tofu_finetune(setup_eval_data: bool = True) -> None:
     if setup_eval_data:
         subprocess.run(["python", "setup_data.py", "--eval"], check=True, cwd=WORKDIR, env=runtime_env())
 
-    subprocess.run(["bash", "scripts/tofu_finetune.sh"], check=True, cwd=WORKDIR, env=runtime_env())
+    subprocess.run(["bash", "scripts/shell/train/tofu_finetune.sh"], check=True, cwd=WORKDIR, env=runtime_env())
 
     results.commit()
     hf_cache.commit()

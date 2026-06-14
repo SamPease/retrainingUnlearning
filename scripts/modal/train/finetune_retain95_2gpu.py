@@ -78,7 +78,7 @@ def run_retain95_repro_trial(
     )
 
     subprocess.run(
-        ["bash", "scripts/tofu_finetune_retain95_repro_2gpu.sh"],
+        ["bash", "scripts/shell/train/tofu_finetune_retain95_2gpu.sh"],
         check=True,
         cwd=WORKDIR,
         env=env,

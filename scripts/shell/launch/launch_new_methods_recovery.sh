@@ -7,7 +7,7 @@
 set -euo pipefail
 
 SEED="${1:-42}"
-SCRIPT="scripts/modal_tofu_finetune_trl_hfbase_forgetx_recovery_llama32_1b.py"
+SCRIPT="scripts/modal/train/recovery_hfbase.py"
 
 TAGS=(
     "altpo_l5e5_b01_a1"

@@ -4,8 +4,8 @@
 # Covers all 9 methods × 2 splits (forget01, forget05) × all seeds.
 set -euo pipefail
 
-HFBASE="scripts/modal_tofu_finetune_trl_hfbase_forgetx_recovery_llama32_1b.py"
-R90="scripts/modal_tofu_finetune_trl_retain90_forget01_forget05_recovery_llama32_1b.py"
+HFBASE="scripts/modal/train/recovery_hfbase.py"
+R90="scripts/modal/train/recovery_retain90.py"
 
 echo "=== Core methods (3 seeds each) ==="
 
@@ -76,4 +76,4 @@ done
 echo ""
 echo "All reeval jobs launched (30 jobs: 9 core-seed + 18 new-method)."
 echo "Wait for completion, then run:"
-echo "  conda run -n unlearning python scripts/download_fixed_es_privleak_results.py"
+echo "  conda run -n unlearning python scripts/analysis/download/download_fixed_es_privleak.py"

@@ -103,7 +103,7 @@ def run_pipeline(
     subprocess.run(
         [
             "python",
-            "scripts/build_tofu_custom_eval_splits.py",
+            "scripts/utils/build_custom_eval_splits.py",
             "--output_dir",
             CUSTOM_SPLITS_DIR,
         ],
@@ -133,7 +133,7 @@ def run_pipeline(
         )
 
         subprocess.run(
-            ["bash", "scripts/tofu_finetune_trl_forget10.sh"],
+            ["bash", "scripts/shell/train/tofu_finetune_trl_forget10.sh"],
             check=True,
             cwd=WORKDIR,
             env=train_env,

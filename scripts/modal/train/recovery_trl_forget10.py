@@ -68,7 +68,7 @@ def run_tofu_trl_forget10(
     )
 
     subprocess.run(
-        ["bash", "scripts/tofu_finetune_trl_forget10.sh"],
+        ["bash", "scripts/shell/train/tofu_finetune_trl_forget10.sh"],
         check=True,
         cwd=WORKDIR,
         env=env,

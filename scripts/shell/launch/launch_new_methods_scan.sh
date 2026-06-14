@@ -4,7 +4,7 @@
 # single GPU. All 6 jobs run in parallel on separate Modal workers.
 set -euo pipefail
 
-SCRIPT="scripts/modal_tofu_eval_hf_new_methods_scan_llama32_1b.py"
+SCRIPT="scripts/modal/eval/scan_new_methods.py"
 
 for METHOD in AltPO GradDiff IdkDPO IdkNLL SimNPO UNDIAL; do
     echo "  launching scan: ${METHOD}"
